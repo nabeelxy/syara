@@ -1,4 +1,4 @@
-# SYARA (Semantic YARA)
+# SYARA (Super YARA)
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -8,7 +8,7 @@ YARA rules are a powerful technique to hunt malware, malicious content and any s
 
 **That's where SYARA comes in.** It allows you to write good old YARA rules as well as semantic rules. The library is written to be compatible with YARA rules so that the learning curve is minimal.
 
-SYara helps to write rules in natural language so that they can match similar intents semantically. It supports rules which can detect malicious intent with high recall and precision by leveraging embeddings, classifiers, and LLM models. This helps to write SYara rules to detect phishing, prompt injection, jailbreak attempts, hullicination, disinformation, and other similar scenarios.
+SYARA helps to write rules in natural language so that they can match similar intents semantically. It supports rules which can detect malicious intent with high recall and precision by leveraging embeddings, classifiers, and LLM models. This helps to write SYARA rules to detect phishing, prompt injection, jailbreak attempts, hullicination, disinformation, and other similar scenarios.
 
 ## Features
 
@@ -352,7 +352,7 @@ class MyCustomLLM(LLMEvaluator):
 
 ## Session Caching
 
-SYara automatically caches cleaned text during rule execution:
+SYARA automatically caches cleaned text during rule execution:
 - Cache is scoped to a single `match()` call
 - Prevents redundant text cleaning when multiple rules use the same cleaner
 - Automatically cleared after matching completes
@@ -369,11 +369,13 @@ See the [examples/](examples/) directory for:
 
 ## Use Cases
 
+- **Malicious Javascript Detection**: Identify injected malicious javascripts based on known patterns
 - **Prompt Injection Detection**: Identify attempts to manipulate LLM behavior
 - **Content Moderation**: Semantic matching of policy violations
 - **Security Scanning**: Detect malicious patterns in user input
 - **Data Classification**: Classify sensitive information semantically
 - **Jailbreak Detection**: Identify attempts to bypass LLM safeguards
+- **Phishing Website Detection**: Identify web pages similar to known phishing pages
 
 ## License
 
@@ -393,7 +395,7 @@ If you use SYara in your research or project, please cite:
 
 ```bibtex
 @software{syara2025,
-  title = {SYara: Semantic YARA Rules for LLM Security},
+  title = {SYARA: Super YARA Rules for LLM Security},
   author = {Mohamed Nabeel},
   year = {2025},
   url = {https://github.com/nabeelxy/syara}
