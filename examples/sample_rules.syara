@@ -6,7 +6,7 @@ rule prompt_injection_basic: security malicious
     meta:
         author = "nabeelxy"
         description = "Detects basic prompt injection attempts"
-        date = "2025-12-27"
+        date = "2025-11-30"
         confidence = "high"
         verdict = "malicious"
 
@@ -23,7 +23,7 @@ rule prompt_injection_advanced: security malicious
     meta:
         author = "nabeelxy"
         description = "Advanced prompt injection detection with semantic matching"
-        date = "2025-12-27"
+        date = "2025-11-30"
         confidence = "80"
         verdict = "suspicious"
 
@@ -49,7 +49,7 @@ rule jailbreak_attempt: security attack
     meta:
         author = "nabeelxy"
         description = "Detects jailbreak attempts using DAN or similar techniques"
-        date = "2025-12-27"
+        date = "2025-11-30"
 
     strings:
         $dan1 = "do anything now" nocase
@@ -68,7 +68,7 @@ rule data_exfiltration: security leak
     meta:
         author = "nabeelxy"
         description = "Detects attempts to exfiltrate training data or system prompts"
-        date = "2025-12-27"
+        date = "2025-11-30"
 
     strings:
         $reveal1 = "reveal your" nocase
