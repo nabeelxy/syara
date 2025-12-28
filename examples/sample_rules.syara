@@ -1,4 +1,4 @@
-// Sample SYara Rules
+// Sample SYara Rules for Text Matching
 // Demonstrates string, similarity, classifier, and LLM patterns
 
 rule prompt_injection_basic: security malicious
