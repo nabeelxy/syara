@@ -15,11 +15,13 @@ class Config:
     default_cleaner: str = "default_cleaning"
     default_chunker: str = "no_chunking"
     default_matcher: str = "sbert"
+    default_phash: str = "imagehash"
     default_classifier: str = "tuned-sbert"
     default_llm: str = "gpt-oss20b"
     cleaners: Dict[str, str] = field(default_factory=dict)
     chunkers: Dict[str, str] = field(default_factory=dict)
     matchers: Dict[str, str] = field(default_factory=dict)
+    phash_matchers: Dict[str, str] = field(default_factory=dict)
     classifiers: Dict[str, str] = field(default_factory=dict)
     llms: Dict[str, str] = field(default_factory=dict)
     api_keys: Dict[str, str] = field(default_factory=dict)
@@ -40,6 +42,7 @@ class ConfigManager:
         self._cleaner_cache: Dict[str, Any] = {}
         self._chunker_cache: Dict[str, Any] = {}
         self._matcher_cache: Dict[str, Any] = {}
+        self._phash_cache: Dict[str, Any] = {}
         self._classifier_cache: Dict[str, Any] = {}
         self._llm_cache: Dict[str, Any] = {}
 
@@ -67,11 +70,13 @@ class ConfigManager:
             default_cleaner=data.get('default_cleaner', 'default_cleaning'),
             default_chunker=data.get('default_chunker', 'no_chunking'),
             default_matcher=data.get('default_matcher', 'sbert'),
+            default_phash=data.get('default_phash', 'imagehash'),
             default_classifier=data.get('default_classifier', 'tuned-sbert'),
             default_llm=data.get('default_llm', 'gpt-oss20b'),
             cleaners=data.get('cleaners', {}),
             chunkers=data.get('chunkers', {}),
             matchers=data.get('matchers', {}),
+            phash_matchers=data.get('phash_matchers', {}),
             classifiers=data.get('classifiers', {}),
             llms=data.get('llms', {}),
             api_keys=api_keys,
@@ -96,6 +101,11 @@ class ConfigManager:
             },
             matchers={
                 'sbert': 'syara.engine.semantic_matcher.SBERTMatcher',
+            },
+            phash_matchers={
+                'imagehash': 'syara.engine.phash_matcher.ImageHashMatcher',
+                'audiohash': 'syara.engine.phash_matcher.AudioHashMatcher',
+                'videohash': 'syara.engine.phash_matcher.VideoHashMatcher',
             },
             classifiers={
                 'tuned-sbert': 'syara.engine.classifier.TunedSBERTClassifier',
@@ -179,6 +189,22 @@ class ConfigManager:
         self._matcher_cache[name] = instance
         return instance
 
+    def get_phash_matcher(self, name: Optional[str] = None):
+        """Get a phash matcher instance by name."""
+        if name is None:
+            name = self.config.default_phash
+
+        if name in self._phash_cache:
+            return self._phash_cache[name]
+
+        class_path = self.config.phash_matchers.get(name)
+        if class_path is None:
+            raise ValueError(f"Unknown phash matcher: {name}")
+
+        instance = self._instantiate_class(class_path)
+        self._phash_cache[name] = instance
+        return instance
+
     def get_classifier(self, name: Optional[str] = None):
         """Get a classifier instance by name."""
         if name is None:
@@ -249,6 +275,12 @@ class ConfigManager:
         self.config.classifiers[name] = class_path
         if name in self._classifier_cache:
             del self._classifier_cache[name]
+
+    def register_phash_matcher(self, name: str, class_path: str) -> None:
+        """Register a custom phash matcher."""
+        self.config.phash_matchers[name] = class_path
+        if name in self._phash_cache:
+            del self._phash_cache[name]
 
     def register_llm(self, name: str, class_path: str) -> None:
         """Register a custom LLM evaluator."""
