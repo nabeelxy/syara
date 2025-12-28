@@ -1,0 +1,53 @@
+# SYara Configuration File
+# This file defines default cleaners, chunkers, matchers, classifiers, and LLMs
+
+# Default components to use when not specified in rules
+default_cleaner: default_cleaning
+default_chunker: no_chunking
+default_matcher: sbert
+default_classifier: tuned-sbert
+default_llm: gpt-oss20b
+
+# Text cleaners - preprocessing strategies
+cleaners:
+  default_cleaning: syara.engine.cleaner.DefaultCleaner
+  no_op: syara.engine.cleaner.NoOpCleaner
+  aggressive: syara.engine.cleaner.AggressiveCleaner
+
+# Chunking strategies for splitting large documents
+chunkers:
+  no_chunking: syara.engine.chunker.NoChunker
+  text_chunking: syara.engine.chunker.SentenceChunker
+  sentence_chunking: syara.engine.chunker.SentenceChunker
+  fixed_size: syara.engine.chunker.FixedSizeChunker
+  paragraph: syara.engine.chunker.ParagraphChunker
+  word: syara.engine.chunker.WordChunker
+
+# Semantic matchers - embedding-based similarity
+matchers:
+  sbert: syara.engine.semantic_matcher.SBERTMatcher
+
+# Classifiers - fine-tuned models for binary classification
+classifiers:
+  tuned-sbert: syara.engine.classifier.TunedSBERTClassifier
+
+# LLM evaluators - language models for semantic evaluation
+llms:
+  gpt-oss20b: syara.engine.llm_evaluator.OSSLLMEvaluator
+  gpt-4: syara.engine.llm_evaluator.OpenAIEvaluator
+  openai: syara.engine.llm_evaluator.OpenAIEvaluator
+
+# API keys for proprietary services
+# Use ${ENV_VAR_NAME} to load from environment variables
+api_keys:
+  openai: ${OPENAI_API_KEY}
+
+# LLM-specific configurations
+llm_configs:
+  gpt-oss20b:
+    model: google/flan-t5-large
+    endpoint: http://localhost:8000
+  gpt-4:
+    model: gpt-4-turbo-preview
+  openai:
+    model: gpt-3.5-turbo
