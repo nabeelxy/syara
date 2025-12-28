@@ -37,6 +37,48 @@ pip install syara[all]
 pip install syara[dev]
 ```
 
+## Project Structure
+
+```
+syara/
+├── syara/                          # Main package directory
+│   ├── __init__.py                # Public API exports
+│   ├── models.py                  # Data models (Rule, Match, StringRule, etc.)
+│   ├── compiler.py                # SYaraCompiler for compiling .syara files
+│   ├── compiled_rules.py          # CompiledRules with match() and match_file()
+│   ├── parser.py                  # Rule file parser (.syara syntax)
+│   ├── cache.py                   # TextCache for session-scoped caching
+│   ├── config.py                  # ConfigManager and Config dataclass
+│   ├── config.yaml                # Default configuration
+│   └── engine/                    # Pattern matching engines
+│       ├── __init__.py
+│       ├── string_matcher.py     # String/regex matching
+│       ├── semantic_matcher.py   # SBERT and custom semantic matchers
+│       ├── classifier.py         # ML classifiers (TunedSBERTClassifier)
+│       ├── llm_evaluator.py      # LLM evaluators (OpenAI, OSS models)
+│       ├── phash_matcher.py      # Perceptual hash for binary files
+│       ├── cleaner.py            # Text preprocessing (DefaultCleaner, etc.)
+│       └── chunker.py            # Text chunking strategies
+│
+├── examples/                       # Usage examples
+│   ├── basic_usage.py             # Basic rule compilation and matching
+│   ├── custom_matcher.py          # Creating custom semantic matchers
+│   ├── sample_rules.syara         # Text-based rules (strings, similarity, etc.)
+│   └── image_rules.syara          # Binary file rules (phash for images)
+│
+├── tests/                          # Test suite
+│   ├── test_basic.py              # Basic unit tests
+│   ├── test_compiler.py           # Compiler tests
+│   ├── test_matchers.py           # Matcher tests
+│   ├── test_parser.py             # Parser tests
+│   └── test_integration.py        # Integration tests
+│
+├── verify_install.py               # Installation verification script
+├── pyproject.toml                  # Package configuration and dependencies
+├── README.md                       # This file
+└── LICENSE                         # MIT License
+```
+
 ## Quick Start
 
 ### 1. Create a rule file (`rules.syara`)
