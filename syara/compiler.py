@@ -140,7 +140,23 @@ class SYaraCompiler:
         condition_identifiers = set(re.findall(r'\$\w+', rule.condition))
 
         # Check if all condition identifiers exist
-        undefined = condition_identifiers - identifiers
+        # Handle wildcards like $dan* by checking if any identifier starts with the prefix
+        undefined = set()
+        for cond_id in condition_identifiers:
+            # Check if it's an exact match
+            if cond_id in identifiers:
+                continue
+
+            # Check if it's a wildcard pattern (e.g., $dan used with "any of ($dan*)")
+            # In YARA, you can use $var* to match all variables starting with $var
+            is_wildcard_match = False
+            for actual_id in identifiers:
+                if actual_id.startswith(cond_id):
+                    is_wildcard_match = True
+                    break
+
+            if not is_wildcard_match:
+                undefined.add(cond_id)
 
         if undefined:
             raise ValueError(
