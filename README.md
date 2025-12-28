@@ -92,15 +92,19 @@ for match in matches:
 
 ## Rule Types
 
-Traditional YARA supports only string rules. **SYara extends this with four additional rule types**:
+Traditional YARA supports only string rules. **SYara extends this with additional rule types**:
 
-### 1. Strings Rules (Traditional YARA)
+### Text-Based Rules
+
+These rules work with natural language text input:
+
+#### 1. Strings Rules (Traditional YARA)
 - **Syntax**: `$identifier = "pattern"` or `$identifier = /regex/i`
 - **Modifiers**: `nocase`, `wide`, `dotall`, `multiline`
 - Any regular expression pattern
 - **Cost**: Very low (fastest)
 
-### 2. Similarity Rules (Semantic Matching)
+#### 2. Similarity Rules (Semantic Matching)
 - **Syntax**: `$identifier = "pattern" threshold cleaner chunker matcher`
 - **Example**: `$s3 = "ignore previous instructions" 0.8 default_cleaning no_chunking sbert`
 - **Parameters**:
@@ -111,19 +115,7 @@ Traditional YARA supports only string rules. **SYara extends this with four addi
 - **Cost**: Moderate
 - **Customization**: Create custom matchers by extending `SemanticMatcher` class
 
-### 3. PHash Rules (Perceptual Hash Matching)
-- **Syntax**: `$identifier = "pattern" threshold cleaner chunker phash_name`
-- **Example**: `$p1 = "suspicious text pattern" 0.8 default_cleaning no_chunking simhash`
-- **Parameters**:
-  - `threshold` (0.0-1.0): Similarity score threshold (based on normalized Hamming distance)
-  - `cleaner`: Text preprocessing strategy (default: `default_cleaning`)
-  - `chunker`: Text chunking strategy (default: `no_chunking`)
-  - `phash_name`: Perceptual hash algorithm (default: `simhash`, options: `simhash`, `minhash`)
-- **Cost**: Moderate-to-high
-- **Customization**: Create custom phash matchers by extending `PHashMatcher` class
-- **Use Case**: Detecting near-duplicate or similar content using content fingerprinting
-
-### 4. Classifier Rules (ML Classification)
+#### 3. Classifier Rules (ML Classification)
 - **Syntax**: `$identifier = "pattern" threshold cleaner chunker classifier`
 - **Example**: `$s4 = "ignore previous instructions" 0.7 default_cleaning no_chunking tuned-sbert`
 - **Parameters**:
@@ -134,7 +126,7 @@ Traditional YARA supports only string rules. **SYara extends this with four addi
 - **Cost**: Higher than similarity
 - **Customization**: Create custom classifiers by extending `SemanticClassifier` class
 
-### 5. LLM Rules (Language Model Evaluation)
+#### 4. LLM Rules (Language Model Evaluation)
 - **Syntax**: `$identifier = "pattern" llm_name`
 - **Example**: `$s5 = "ignore previous instructions" gpt-oss20b`
 - **Parameters**:
@@ -142,16 +134,38 @@ Traditional YARA supports only string rules. **SYara extends this with four addi
 - **Cost**: Highest (most expensive)
 - **Customization**: Create custom LLM evaluators by extending `LLMEvaluator` class
 
+### Binary File Rules
+
+These rules work with binary file input (images, audio, video):
+
+#### PHash Rules (Perceptual Hash Matching)
+- **Syntax**: `$identifier = "reference_file_path" threshold phash_type`
+- **Example**: `$p1 = "malicious_logo.png" 0.9 imagehash`
+- **Parameters**:
+  - `reference_file_path`: Path to reference file to match against
+  - `threshold` (0.0-1.0): Similarity score threshold (based on normalized Hamming distance)
+  - `phash_type`: Hash algorithm - `imagehash` (images), `audiohash` (audio), `videohash` (video)
+- **Cost**: Moderate-to-high
+- **Customization**: Create custom phash matchers by extending `PHashMatcher` class
+- **Use Case**: Detecting near-duplicate or similar binary content (malicious images, audio fingerprints, video clips)
+- **Note**: PHash rules are **separate from text rules** and use `rules.match_file(file_path)` instead of `rules.match(text)`
+
 ## Execution Cost Optimization
 
 SYara automatically optimizes rule execution:
 
+**Text Rules**:
 ```
-strings << similarity < phash < classifier << llm
-(fastest)                                    (slowest)
+strings << similarity < classifier << llm
+(fastest)                        (slowest)
 ```
 
-Rules are executed in this order to minimize computational cost. Expensive operations (LLM) are only run when necessary for condition evaluation.
+**Binary File Rules**:
+```
+phash (computed on-demand for each file)
+```
+
+Rules are executed in this order to minimize computational cost. Expensive operations (LLM, PHash) are only run when necessary for condition evaluation.
 
 ## Text Processing Components
 
@@ -181,7 +195,7 @@ Create `config.yaml` to customize defaults:
 default_cleaner: default_cleaning
 default_chunker: no_chunking
 default_matcher: sbert
-default_phash: simhash
+default_phash: imagehash
 default_classifier: tuned-sbert
 default_llm: gpt-oss20b
 
@@ -191,8 +205,9 @@ matchers:
   my_custom_matcher: mymodule.CustomMatcher
 
 phash_matchers:
-  simhash: syara.engine.phash_matcher.SimHashMatcher
-  minhash: syara.engine.phash_matcher.MinHashMatcher
+  imagehash: syara.engine.phash_matcher.ImageHashMatcher
+  audiohash: syara.engine.phash_matcher.AudioHashMatcher
+  videohash: syara.engine.phash_matcher.VideoHashMatcher
   my_custom_phash: mymodule.CustomPHashMatcher
 
 # API keys for proprietary LLMs
@@ -228,15 +243,37 @@ class MyCustomMatcher(SemanticMatcher):
         return 0.85
 ```
 
+### Using PHash for Binary Files
+
+```python
+import syara
+
+# Compile rules with phash patterns
+rules = syara.compile('image_rules.syara')
+
+# Match an image file against phash rules
+matches = rules.match_file('suspect_image.png')
+
+for match in matches:
+    if match.matched:
+        print(f"Image matched rule: {match.rule_name}")
+        for identifier, details in match.matched_patterns.items():
+            print(f"  Pattern {identifier}: similarity {details[0].score:.2f}")
+```
+
 ### Creating Custom PHash Matchers
 
 ```python
 from syara.engine.phash_matcher import PHashMatcher
+from pathlib import Path
 
 class MyCustomPHashMatcher(PHashMatcher):
-    def compute_hash(self, text: str) -> int:
-        # Your hashing logic
-        return hash(text) & 0xFFFFFFFFFFFFFFFF  # 64-bit hash
+    def compute_hash(self, file_path: Union[str, Path]) -> int:
+        # Your hashing logic for binary files
+        # Example: read file and compute hash
+        with open(file_path, 'rb') as f:
+            data = f.read()
+            return hash(data) & 0xFFFFFFFFFFFFFFFF  # 64-bit hash
 
     def hamming_distance(self, hash1: int, hash2: int) -> int:
         # Calculate bit differences
