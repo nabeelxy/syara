@@ -103,6 +103,7 @@ class SYaraCompiler:
         total_patterns = (
             len(rule.strings) +
             len(rule.similarity) +
+            len(rule.phash) +
             len(rule.classifier) +
             len(rule.llm)
         )
@@ -129,6 +130,8 @@ class SYaraCompiler:
             identifiers.add(s.identifier)
         for s in rule.similarity:
             identifiers.add(s.identifier)
+        for p in rule.phash:
+            identifiers.add(p.identifier)
         for s in rule.classifier:
             identifiers.add(s.identifier)
         for s in rule.llm:
@@ -173,6 +176,13 @@ class SYaraCompiler:
                 self.config_manager.get_matcher(sim.matcher_name)
             except ValueError as e:
                 raise ValueError(f"Rule '{rule.name}', pattern '{sim.identifier}': {e}")
+
+        # Validate phash rules
+        for phash in rule.phash:
+            try:
+                self.config_manager.get_phash_matcher(phash.phash_name)
+            except ValueError as e:
+                raise ValueError(f"Rule '{rule.name}', pattern '{phash.identifier}': {e}")
 
         # Validate classifier rules
         for cls in rule.classifier:
