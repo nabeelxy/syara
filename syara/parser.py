@@ -8,6 +8,7 @@ from syara.models import (
     Rule,
     StringRule,
     SimilarityRule,
+    PHashRule,
     ClassifierRule,
     LLMRule
 )
@@ -107,6 +108,7 @@ class SYaraParser:
         meta = self._parse_meta_section(body)
         strings = self._parse_strings_section(body)
         similarity = self._parse_similarity_section(body)
+        phash = self._parse_phash_section(body)
         classifier = self._parse_classifier_section(body)
         llm = self._parse_llm_section(body)
         condition = self._parse_condition_section(body)
@@ -117,6 +119,7 @@ class SYaraParser:
             meta=meta,
             strings=strings,
             similarity=similarity,
+            phash=phash,
             classifier=classifier,
             llm=llm,
             condition=condition
@@ -127,7 +130,7 @@ class SYaraParser:
         meta = {}
 
         # Find meta section
-        meta_match = re.search(r'meta:\s*(.*?)(?=\n\s*(?:strings|similarity|classifier|llm|condition):|$)', body, re.DOTALL)
+        meta_match = re.search(r'meta:\s*(.*?)(?=\n\s*(?:strings|similarity|phash|classifier|llm|condition):|$)', body, re.DOTALL)
 
         if not meta_match:
             return meta
@@ -153,7 +156,7 @@ class SYaraParser:
         strings = []
 
         # Find strings section
-        strings_match = re.search(r'strings:\s*(.*?)(?=\n\s*(?:similarity|classifier|llm|condition):|$)', body, re.DOTALL)
+        strings_match = re.search(r'strings:\s*(.*?)(?=\n\s*(?:similarity|phash|classifier|llm|condition):|$)', body, re.DOTALL)
 
         if not strings_match:
             return strings
@@ -204,7 +207,7 @@ class SYaraParser:
         similarity_rules = []
 
         # Find similarity section
-        sim_match = re.search(r'similarity:\s*(.*?)(?=\n\s*(?:classifier|llm|condition):|$)', body, re.DOTALL)
+        sim_match = re.search(r'similarity:\s*(.*?)(?=\n\s*(?:phash|classifier|llm|condition):|$)', body, re.DOTALL)
 
         if not sim_match:
             return similarity_rules
@@ -246,6 +249,51 @@ class SYaraParser:
             ))
 
         return similarity_rules
+
+    def _parse_phash_section(self, body: str) -> List[PHashRule]:
+        """Parse phash section."""
+        phash_rules = []
+
+        # Find phash section
+        phash_match = re.search(r'phash:\s*(.*?)(?=\n\s*(?:classifier|llm|condition):|$)', body, re.DOTALL)
+
+        if not phash_match:
+            return phash_rules
+
+        phash_content = phash_match.group(1)
+
+        # Parse each phash rule
+        # Format: $identifier = "file_path" threshold phash_type
+        # Example: $p1 = "reference_image.png" 0.9 imagehash
+        for line in phash_content.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = line.split('"')
+            if len(parts) < 3:
+                continue
+
+            # Extract identifier
+            identifier = parts[0].strip().rstrip('=').strip()
+
+            # Extract file path
+            file_path = parts[1]
+
+            # Extract parameters
+            params = parts[2].strip().split()
+
+            threshold = float(params[0]) if params else 0.9
+            phash_name = params[1] if len(params) > 1 else "imagehash"
+
+            phash_rules.append(PHashRule(
+                identifier=identifier,
+                file_path=file_path,
+                threshold=threshold,
+                phash_name=phash_name
+            ))
+
+        return phash_rules
 
     def _parse_classifier_section(self, body: str) -> List[ClassifierRule]:
         """Parse classifier section."""
