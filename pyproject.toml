@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Semantic YARA - YARA-like rules with semantic matching, classification, and LLM evaluation"
 readme = "README.md"
 authors = [
-    {name = "nabeelxy", email = ""}
+    {name = "nabeelxy"}
 ]
 license = {text = "MIT"}
 classifiers = [
