@@ -12,7 +12,7 @@ from syara.engine.string_matcher import StringMatcher
 class CompiledRules:
     """
     Compiled rules ready for matching.
-    Executes rules in cost-optimized order: strings → similarity → classifier → llm
+    Executes rules in cost-optimized order: strings → similarity → phash → classifier → llm
     """
 
     def __init__(self, rules: List[Rule], config_manager: ConfigManager):
@@ -29,7 +29,8 @@ class CompiledRules:
 
     def match(self, text: str) -> List[Match]:
         """
-        Match text against all compiled rules.
+        Match text against all text-based rules (strings, similarity, classifier, llm).
+        Note: This will NOT match phash rules which require binary file input.
 
         Args:
             text: Input text to match
@@ -44,7 +45,7 @@ class CompiledRules:
             # Execute each rule
             matches = []
             for rule in self.rules:
-                match = self._execute_rule(rule, text, cache)
+                match = self._execute_rule(rule, text, cache, file_path=None)
                 matches.append(match)
 
             return matches
@@ -53,14 +54,41 @@ class CompiledRules:
             # Always clear cache after matching session
             cache.clear()
 
-    def _execute_rule(self, rule: Rule, text: str, cache: TextCache) -> Match:
+    def match_file(self, file_path: str) -> List[Match]:
         """
-        Execute a single rule against text.
+        Match binary file against phash rules.
+
+        Args:
+            file_path: Path to binary file (image, audio, video)
+
+        Returns:
+            List of Match objects for rules containing phash patterns
+        """
+        # Create a session cache (not used for phash but kept for consistency)
+        cache = TextCache()
+
+        try:
+            # Execute each rule that has phash patterns
+            matches = []
+            for rule in self.rules:
+                if rule.phash:  # Only execute rules with phash patterns
+                    match = self._execute_rule(rule, "", cache, file_path=file_path)
+                    matches.append(match)
+
+            return matches
+
+        finally:
+            cache.clear()
+
+    def _execute_rule(self, rule: Rule, text: str, cache: TextCache, file_path: str = None) -> Match:
+        """
+        Execute a single rule against text or file.
 
         Args:
             rule: Rule to execute
-            text: Input text
+            text: Input text (for text-based rules)
             cache: Text cache for this session
+            file_path: Optional file path (for phash rules)
 
         Returns:
             Match object with results
@@ -83,13 +111,20 @@ class CompiledRules:
             if matches:
                 pattern_matches[sim_rule.identifier] = matches
 
-        # 3. Classifier patterns (higher cost)
+        # 3. Phash patterns (moderate-to-high cost) - only if file_path provided
+        if file_path:
+            for phash_rule in rule.phash:
+                matches = self._execute_phash(phash_rule, file_path)
+                if matches:
+                    pattern_matches[phash_rule.identifier] = matches
+
+        # 4. Classifier patterns (higher cost)
         for cls_rule in rule.classifier:
             matches = self._execute_classifier(cls_rule, text, cache)
             if matches:
                 pattern_matches[cls_rule.identifier] = matches
 
-        # 4. LLM patterns (highest cost)
+        # 5. LLM patterns (highest cost)
         # Only execute if needed by condition
         for llm_rule in rule.llm:
             # Check if LLM pattern is needed for condition
@@ -126,6 +161,29 @@ class CompiledRules:
         matches = matcher.match_chunks(rule, chunks)
 
         return matches
+
+    def _execute_phash(self, rule, file_path: str) -> List[MatchDetail]:
+        """Execute phash matching on binary files."""
+        # Get phash matcher
+        phash_matcher = self.config_manager.get_phash_matcher(rule.phash_name)
+
+        # Compute similarity between reference file and input file
+        try:
+            similarity = phash_matcher.similarity(rule.file_path, file_path)
+
+            # Check if similarity meets threshold
+            if similarity >= rule.threshold:
+                return [MatchDetail(
+                    identifier=rule.identifier,
+                    matched_text=f"File: {file_path}",
+                    score=similarity
+                )]
+        except Exception as e:
+            # If hashing fails (file not found, wrong format, etc.), return no matches
+            import warnings
+            warnings.warn(f"PHash matching failed for {file_path}: {e}")
+
+        return []
 
     def _execute_classifier(self, rule, text: str, cache: TextCache) -> List[MatchDetail]:
         """Execute classifier matching."""
