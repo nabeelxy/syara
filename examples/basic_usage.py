@@ -9,7 +9,7 @@ This example demonstrates:
 """
 
 import syara
-
+import os
 
 def main():
     print("SYara Basic Usage Example")
@@ -17,7 +17,7 @@ def main():
 
     # Compile rules from file
     print("\n1. Compiling rules...")
-    rules = syara.compile('sample_rules.syara')
+    rules = syara.compile(os.path.join(os.path.dirname(__file__),'sample_rules.syara'))
     print(f"   Loaded {len(rules)} rules")
 
     # Example texts to test
