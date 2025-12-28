@@ -92,7 +92,7 @@ for match in matches:
 
 ## Rule Types
 
-Traditional YARA supports only string rules. **SYara extends this with three additional rule types**:
+Traditional YARA supports only string rules. **SYara extends this with four additional rule types**:
 
 ### 1. Strings Rules (Traditional YARA)
 - **Syntax**: `$identifier = "pattern"` or `$identifier = /regex/i`
@@ -111,7 +111,19 @@ Traditional YARA supports only string rules. **SYara extends this with three add
 - **Cost**: Moderate
 - **Customization**: Create custom matchers by extending `SemanticMatcher` class
 
-### 3. Classifier Rules (ML Classification)
+### 3. PHash Rules (Perceptual Hash Matching)
+- **Syntax**: `$identifier = "pattern" threshold cleaner chunker phash_name`
+- **Example**: `$p1 = "suspicious text pattern" 0.8 default_cleaning no_chunking simhash`
+- **Parameters**:
+  - `threshold` (0.0-1.0): Similarity score threshold (based on normalized Hamming distance)
+  - `cleaner`: Text preprocessing strategy (default: `default_cleaning`)
+  - `chunker`: Text chunking strategy (default: `no_chunking`)
+  - `phash_name`: Perceptual hash algorithm (default: `simhash`, options: `simhash`, `minhash`)
+- **Cost**: Moderate-to-high
+- **Customization**: Create custom phash matchers by extending `PHashMatcher` class
+- **Use Case**: Detecting near-duplicate or similar content using content fingerprinting
+
+### 4. Classifier Rules (ML Classification)
 - **Syntax**: `$identifier = "pattern" threshold cleaner chunker classifier`
 - **Example**: `$s4 = "ignore previous instructions" 0.7 default_cleaning no_chunking tuned-sbert`
 - **Parameters**:
@@ -122,7 +134,7 @@ Traditional YARA supports only string rules. **SYara extends this with three add
 - **Cost**: Higher than similarity
 - **Customization**: Create custom classifiers by extending `SemanticClassifier` class
 
-### 4. LLM Rules (Language Model Evaluation)
+### 5. LLM Rules (Language Model Evaluation)
 - **Syntax**: `$identifier = "pattern" llm_name`
 - **Example**: `$s5 = "ignore previous instructions" gpt-oss20b`
 - **Parameters**:
@@ -135,8 +147,8 @@ Traditional YARA supports only string rules. **SYara extends this with three add
 SYara automatically optimizes rule execution:
 
 ```
-strings << similarity < classifier << llm
-(fastest)                          (slowest)
+strings << similarity < phash < classifier << llm
+(fastest)                                    (slowest)
 ```
 
 Rules are executed in this order to minimize computational cost. Expensive operations (LLM) are only run when necessary for condition evaluation.
@@ -169,6 +181,7 @@ Create `config.yaml` to customize defaults:
 default_cleaner: default_cleaning
 default_chunker: no_chunking
 default_matcher: sbert
+default_phash: simhash
 default_classifier: tuned-sbert
 default_llm: gpt-oss20b
 
@@ -176,6 +189,11 @@ default_llm: gpt-oss20b
 matchers:
   sbert: syara.engine.semantic_matcher.SBERTMatcher
   my_custom_matcher: mymodule.CustomMatcher
+
+phash_matchers:
+  simhash: syara.engine.phash_matcher.SimHashMatcher
+  minhash: syara.engine.phash_matcher.MinHashMatcher
+  my_custom_phash: mymodule.CustomPHashMatcher
 
 # API keys for proprietary LLMs
 api_keys:
@@ -208,6 +226,23 @@ class MyCustomMatcher(SemanticMatcher):
     def get_similarity(self, text1: str, text2: str) -> float:
         # Your similarity logic
         return 0.85
+```
+
+### Creating Custom PHash Matchers
+
+```python
+from syara.engine.phash_matcher import PHashMatcher
+
+class MyCustomPHashMatcher(PHashMatcher):
+    def compute_hash(self, text: str) -> int:
+        # Your hashing logic
+        return hash(text) & 0xFFFFFFFFFFFFFFFF  # 64-bit hash
+
+    def hamming_distance(self, hash1: int, hash2: int) -> int:
+        # Calculate bit differences
+        xor = hash1 ^ hash2
+        distance = bin(xor).count('1')
+        return distance
 ```
 
 ### Creating Custom Classifiers
@@ -280,7 +315,7 @@ If you use SYara in your research or project, please cite:
 ```bibtex
 @software{syara2025,
   title = {SYara: Semantic YARA Rules for LLM Security},
-  author = {nabeelxy},
+  author = {Mohamed Nabeel},
   year = {2025},
   url = {https://github.com/nabeelxy/syara}
 }
