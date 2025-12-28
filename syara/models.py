@@ -26,6 +26,15 @@ class SimilarityRule:
 
 
 @dataclass
+class PHashRule:
+    """Represents a perceptual hash matching rule for binary files (images, audio, video)."""
+    identifier: str  # e.g., "$p1"
+    file_path: str  # Path to reference file (image/audio/video)
+    threshold: float  # 0.0 to 1.0 (Hamming distance normalized)
+    phash_name: str = "imagehash"  # Type of phash: imagehash, audiohash, videohash
+
+
+@dataclass
 class ClassifierRule:
     """Represents a classifier-based matching rule."""
     identifier: str  # e.g., "$s4"
@@ -63,6 +72,7 @@ class Rule:
     meta: Dict[str, str] = field(default_factory=dict)
     strings: List[StringRule] = field(default_factory=list)
     similarity: List[SimilarityRule] = field(default_factory=list)
+    phash: List[PHashRule] = field(default_factory=list)
     classifier: List[ClassifierRule] = field(default_factory=list)
     llm: List[LLMRule] = field(default_factory=list)
     condition: str = ""
