@@ -1,0 +1,51 @@
+// Sample SYara PHash Rules for Binary Files (Images)
+// These rules detect malicious or suspicious images using perceptual hashing
+
+rule malicious_logo_detection: malware image
+{
+    meta:
+        author = "nabeelxy"
+        description = "Detects known malicious company logos in images"
+        date = "2025-12-28"
+        confidence = "high"
+        verdict = "malicious"
+
+    phash:
+        $p1 = "reference_images/phishing_logo_1.png" 0.95 imagehash
+        $p2 = "reference_images/phishing_logo_2.png" 0.95 imagehash
+        $p3 = "reference_images/malware_icon.png" 0.90 imagehash
+
+    condition:
+        any of ($p*)
+}
+
+rule duplicate_malware_screenshot: malware image
+{
+    meta:
+        author = "nabeelxy"
+        description = "Detects near-duplicate screenshots of known malware UI"
+        date = "2025-12-28"
+        confidence = "medium"
+
+    phash:
+        $p1 = "reference_images/ransomware_screen.png" 0.85 imagehash
+        $p2 = "reference_images/fake_update_screen.png" 0.85 imagehash
+
+    condition:
+        $p1 or $p2
+}
+
+rule suspicious_qr_code: suspicious image
+{
+    meta:
+        author = "nabeelxy"
+        description = "Detects QR codes similar to known phishing QR codes"
+        date = "2025-12-28"
+
+    phash:
+        $qr1 = "reference_images/phishing_qr_1.png" 0.80 imagehash
+        $qr2 = "reference_images/phishing_qr_2.png" 0.80 imagehash
+
+    condition:
+        any of ($qr*)
+}
