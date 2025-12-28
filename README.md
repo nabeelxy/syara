@@ -1,4 +1,4 @@
-# SYara (Semantic YARA)
+# SYARA (Semantic YARA)
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -6,7 +6,7 @@
 YARA rules are a powerful technique to hunt malware, malicious content and any suspicious network patterns. They are easy to write, quite efficient, and can apply at scale. They support boolean expressions of keyword or regular expression based rules. However, they lack semantic rules where one can identify lexically similar artifacts. With the popularity of GenAI, which allows one to specify instructions in natural language, writing YARA rules to match natural language is quite difficult as capturing all possible variations is hard.
 
 
-**That's where SYara comes in.** It allows you to write good old YARA rules as well as semantic rules. The library is written to be compatible with YARA rules so that the learning curve is minimal.
+**That's where SYARA comes in.** It allows you to write good old YARA rules as well as semantic rules. The library is written to be compatible with YARA rules so that the learning curve is minimal.
 
 SYara helps to write rules in natural language so that they can match similar intents semantically. It supports rules which can detect malicious intent with high recall and precision by leveraging embeddings, classifiers, and LLM models. This helps to write SYara rules to detect phishing, prompt injection, jailbreak attempts, hullicination, disinformation, and other similar scenarios.
 
@@ -48,7 +48,7 @@ rule prompt_injection_1: JS HTML
     meta:
         author = "nabeelxy"
         description = "Rule for detecting prompt injection"
-        date = "2025-11-15"
+        date = "2025-10-15"
         confidence = "80"
         verdict = "suspicious"
 
