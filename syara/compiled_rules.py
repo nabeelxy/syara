@@ -188,10 +188,10 @@ class CompiledRules:
         pattern_matches: Dict[str, List[MatchDetail]]
     ) -> bool:
         """
-        Evaluate boolean condition.
+        Evaluate boolean condition with YARA syntax support.
 
         Args:
-            condition: Condition string (e.g., "$s1 and ($s2 or $s3)")
+            condition: Condition string (e.g., "$s1 and ($s2 or $s3)" or "any of ($dan*)")
             pattern_matches: Dictionary of pattern matches
 
         Returns:
@@ -200,17 +200,8 @@ class CompiledRules:
         if not condition:
             return False
 
-        # Build evaluation context
-        # Replace pattern identifiers with their boolean values
-        eval_expr = condition
-
-        # Find all identifiers in condition
-        identifiers = set(re.findall(r'\$\w+', condition))
-
-        # Replace each identifier with True/False based on matches
-        for identifier in identifiers:
-            has_match = identifier in pattern_matches and len(pattern_matches[identifier]) > 0
-            eval_expr = eval_expr.replace(identifier, str(has_match))
+        # Translate YARA syntax to Python
+        eval_expr = self._translate_yara_condition(condition, pattern_matches)
 
         # Evaluate the expression safely
         try:
@@ -222,6 +213,83 @@ class CompiledRules:
             # If evaluation fails, log and return False
             print(f"Warning: Failed to evaluate condition '{condition}': {e}")
             return False
+
+    def _translate_yara_condition(
+        self,
+        condition: str,
+        pattern_matches: Dict[str, List[MatchDetail]]
+    ) -> str:
+        """
+        Translate YARA condition syntax to Python boolean expression.
+
+        Handles:
+        - Simple identifiers: $s1 -> True/False
+        - Wildcards: any of ($dan*) -> (True or False or ...)
+        - all of: all of ($s*) -> (True and False and ...)
+        - Boolean operators: and, or, not
+
+        Args:
+            condition: YARA condition string
+            pattern_matches: Dictionary of pattern matches
+
+        Returns:
+            Python boolean expression string
+        """
+        eval_expr = condition
+
+        # Handle "any of" and "all of" patterns
+        # Pattern: any of ($identifier*) or all of ($identifier*)
+        any_of_pattern = r'any\s+of\s+\(\s*(\$\w+)\*\s*\)'
+        all_of_pattern = r'all\s+of\s+\(\s*(\$\w+)\*\s*\)'
+
+        # Replace "any of ($prefix*)" with OR of matching identifiers
+        for match in re.finditer(any_of_pattern, eval_expr, re.IGNORECASE):
+            prefix = match.group(1)
+            # Find all identifiers that start with this prefix
+            matching_ids = [id for id in pattern_matches.keys() if id.startswith(prefix)]
+
+            if matching_ids:
+                # Build OR expression
+                or_parts = []
+                for id in matching_ids:
+                    has_match = len(pattern_matches[id]) > 0
+                    or_parts.append(str(has_match))
+                replacement = f"({' or '.join(or_parts)})"
+            else:
+                replacement = "False"
+
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
+        # Replace "all of ($prefix*)" with AND of matching identifiers
+        for match in re.finditer(all_of_pattern, eval_expr, re.IGNORECASE):
+            prefix = match.group(1)
+            # Find all identifiers that start with this prefix
+            matching_ids = [id for id in pattern_matches.keys() if id.startswith(prefix)]
+
+            if matching_ids:
+                # Build AND expression
+                and_parts = []
+                for id in matching_ids:
+                    has_match = len(pattern_matches[id]) > 0
+                    and_parts.append(str(has_match))
+                replacement = f"({' and '.join(and_parts)})"
+            else:
+                replacement = "False"
+
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
+        # Find all remaining simple identifiers in condition
+        identifiers = set(re.findall(r'\$\w+', eval_expr))
+
+        # Replace each identifier with True/False based on matches
+        # Sort by length (longest first) to avoid partial replacements
+        for identifier in sorted(identifiers, key=len, reverse=True):
+            has_match = identifier in pattern_matches and len(pattern_matches[identifier]) > 0
+            # Replace all occurrences of this exact identifier
+            # Use negative lookahead to avoid replacing $s1 when looking for $s10
+            eval_expr = re.sub(re.escape(identifier) + r'(?!\w)', str(has_match), eval_expr)
+
+        return eval_expr
 
     def __repr__(self) -> str:
         """String representation of compiled rules."""
