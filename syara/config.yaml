@@ -5,6 +5,7 @@
 default_cleaner: default_cleaning
 default_chunker: no_chunking
 default_matcher: sbert
+default_phash: imagehash
 default_classifier: tuned-sbert
 default_llm: gpt-oss20b
 
@@ -26,6 +27,12 @@ chunkers:
 # Semantic matchers - embedding-based similarity
 matchers:
   sbert: syara.engine.semantic_matcher.SBERTMatcher
+
+# Perceptual hash matchers - binary file fingerprinting (images, audio, video)
+phash_matchers:
+  imagehash: syara.engine.phash_matcher.ImageHashMatcher
+  audiohash: syara.engine.phash_matcher.AudioHashMatcher
+  videohash: syara.engine.phash_matcher.VideoHashMatcher
 
 # Classifiers - fine-tuned models for binary classification
 classifiers:
