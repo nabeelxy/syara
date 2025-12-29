@@ -83,19 +83,50 @@ syara/
 
 ### 1. Create a rule file (`rules.syara`)
 
-The following is an example:
+The following is a basic example:
 ```
-rule prompt_injection_1: JS HTML
+rule prompt_injection_detection: message
 {
     meta:
         author = "nabeelxy"
-        description = "Rule for detecting prompt injection"
-        date = "2025-10-15"
+        description = "Rule for detecting prompt injection in messages"
+        date = "2025-09-15"
         confidence = "80"
         verdict = "suspicious"
 
     strings:
-        $s1 = "invisible text" nocase
+        $s1 = /\b(disregard|ignore)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|orders|prompts)\b/i
+
+    similarity:
+        $s2 = "ignore previous instructions" 0.8 default_cleaning no_chunking sbert
+    
+    condition:
+        $s1 or $s2
+}
+```
+
+Let's break down what it does:
+* There are two rules: one from traditional YARA string rule ($s1) and semantic rule introduced in SYARA ($s1)
+* strings rule looks for prompt injection pattern by performing a regular expression matching.
+* similarity rule looks for prompt injections by performing a semantic matching using SBERT to detect sentences similar to the one in the rule. If the matching is no less than 0.8, the rule returns True.
+* Based on the smart cost optimization, the rule engine first executes $s1 and executes the second rule only if the first one is false.
+* If either of the rule matches, this SYARA rule is deemed matched.
+
+
+The following is an advanced example to detect indirect prompt injection in web pages:
+
+```
+rule indirect_prompt_injection_detection: html
+{
+    meta:
+        author = "nabeelxy"
+        description = "Rule for detecting indirect prompt injection in web pages"
+        date = "2025-09-15"
+        confidence = "80"
+        verdict = "suspicious"
+
+    strings:
+        $s1 = /\b<span\s+style\s*=\s*("opacity: 0"|"font-size: 0"|"visibility: hidden"|"display: none"|"color: transparent"|"text-indent: -9999px")\b/i
         $s2 = /\b(disregard|ignore)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|orders|prompts)\b/i
 
     similarity:
@@ -111,6 +142,17 @@ rule prompt_injection_1: JS HTML
         $s1 and ($s2 or $s3 or $s4 or $s5)
 }
 ```
+
+Let's break down what it does:
+* Indirect prompt injections on web pages often hide the prompt injection from users. Attackers often use HTML invisiblity elements. $s1 rule under strings checks if there
+are invisible elements in the page. This allows to reduce
+the false positives (i.e. a prompt injection example in an educational site or a prompt library site) and also improve 
+efficiency by processing highly likely source pages.
+* Similarity rule is similar to the previous example but adds text cleaning and chunking as we are dealing with large documents.
+* Classifier rule adds ML-based classification using TunedSBERT model to further reduce false positives.
+* LLM-based rule uses generative AI models to validate and detect prompt injection scenarios.
+* Condition rule requires both invisibility check and one of text-based detection methods.
+
 
 ### 2. Use the rules in Python
 
