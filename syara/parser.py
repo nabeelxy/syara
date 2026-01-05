@@ -21,6 +21,44 @@ class SYaraParser:
         """Initialize parser."""
         self.current_line = 0
 
+    def _parse_modifiers(self, params_str: str) -> Dict[str, str]:
+        """
+        Parse YARA-style modifiers (key-value or key-only).
+
+        Supports:
+        - key=value (e.g., threshold=0.8, matcher="sbert")
+        - key="value with spaces" (e.g., cleaner="default cleaning")
+        - key only (e.g., nocase, wide)
+
+        Args:
+            params_str: String containing modifiers
+
+        Returns:
+            Dictionary of parsed modifiers
+        """
+        modifiers = {}
+
+        # Pattern to match key="value" or key=value or just key
+        # Handles quoted values: key="value with spaces"
+        # Handles unquoted values: key=value
+        # Handles boolean flags: nocase
+        pattern = r'(\w+)(?:=(?:"([^"]*)"|([^\s=]+)))?'
+
+        for match in re.finditer(pattern, params_str):
+            key = match.group(1)
+            quoted_value = match.group(2)  # Value in quotes
+            unquoted_value = match.group(3)  # Value without quotes
+
+            if quoted_value is not None:
+                modifiers[key] = quoted_value
+            elif unquoted_value is not None:
+                modifiers[key] = unquoted_value
+            else:
+                # Boolean flag (like 'nocase')
+                modifiers[key] = True
+
+        return modifiers
+
     def parse_file(self, filepath: str) -> List[Rule]:
         """
         Parse a .syara file and return list of rules.
@@ -215,29 +253,30 @@ class SYaraParser:
         sim_content = sim_match.group(1)
 
         # Parse each similarity rule
-        # Format: $identifier = "pattern" threshold cleaner chunker matcher
+        # Format: $identifier = "pattern" threshold=0.8 matcher="sbert" cleaner="default" chunker="sentence"
         for line in sim_content.split('\n'):
             line = line.strip()
             if not line:
                 continue
 
-            parts = line.split('"')
-            if len(parts) < 3:
+            # Match: $identifier = "pattern" parameters
+            match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
+            if not match:
                 continue
 
-            # Extract identifier
-            identifier = parts[0].strip().rstrip('=').strip()
+            # Extract identifier, pattern, and parameters
+            identifier = match.group(1)
+            pattern = match.group(2)
+            params_str = match.group(3).strip()
 
-            # Extract pattern
-            pattern = parts[1]
+            # Parse key-value parameters only
+            parsed_params = self._parse_modifiers(params_str)
 
-            # Extract parameters
-            params = parts[2].strip().split()
-
-            threshold = float(params[0]) if params else 0.8
-            cleaner_name = params[1] if len(params) > 1 else "default_cleaning"
-            chunker_name = params[2] if len(params) > 2 else "no_chunking"
-            matcher_name = params[3] if len(params) > 3 else "sbert"
+            # Extract parameters with defaults
+            threshold = float(parsed_params.get('threshold', 0.8))
+            cleaner_name = parsed_params.get('cleaner', 'default_cleaning')
+            chunker_name = parsed_params.get('chunker', 'no_chunking')
+            matcher_name = parsed_params.get('matcher', 'sbert')
 
             similarity_rules.append(SimilarityRule(
                 identifier=identifier,
@@ -263,28 +302,29 @@ class SYaraParser:
         phash_content = phash_match.group(1)
 
         # Parse each phash rule
-        # Format: $identifier = "file_path" threshold phash_type
-        # Example: $p1 = "reference_image.png" 0.9 imagehash
+        # Format: $identifier = "file_path" threshold=0.9 hasher="imagehash"
         for line in phash_content.split('\n'):
             line = line.strip()
             if not line:
                 continue
 
-            parts = line.split('"')
-            if len(parts) < 3:
+            # Match: $identifier = "file_path" parameters
+            match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
+            if not match:
                 continue
 
-            # Extract identifier
-            identifier = parts[0].strip().rstrip('=').strip()
+            # Extract identifier, file_path, and parameters
+            identifier = match.group(1)
+            file_path = match.group(2)
+            params_str = match.group(3).strip()
 
-            # Extract file path
-            file_path = parts[1]
+            # Parse key-value parameters only
+            parsed_params = self._parse_modifiers(params_str)
 
-            # Extract parameters
-            params = parts[2].strip().split()
-
-            threshold = float(params[0]) if params else 0.9
-            phash_name = params[1] if len(params) > 1 else "imagehash"
+            # Extract parameters with defaults
+            threshold = float(parsed_params.get('threshold', 0.9))
+            # Support both 'hasher' and 'phash' as parameter names
+            phash_name = parsed_params.get('hasher', parsed_params.get('phash', 'imagehash'))
 
             phash_rules.append(PHashRule(
                 identifier=identifier,
@@ -308,29 +348,30 @@ class SYaraParser:
         class_content = class_match.group(1)
 
         # Parse each classifier rule
-        # Format: $identifier = "pattern" threshold cleaner chunker classifier
+        # Format: $identifier = "pattern" threshold=0.7 classifier="deberta" cleaner="default" chunker="sentence"
         for line in class_content.split('\n'):
             line = line.strip()
             if not line:
                 continue
 
-            parts = line.split('"')
-            if len(parts) < 3:
+            # Match: $identifier = "pattern" parameters
+            match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
+            if not match:
                 continue
 
-            # Extract identifier
-            identifier = parts[0].strip().rstrip('=').strip()
+            # Extract identifier, pattern, and parameters
+            identifier = match.group(1)
+            pattern = match.group(2)
+            params_str = match.group(3).strip()
 
-            # Extract pattern
-            pattern = parts[1]
+            # Parse key-value parameters only
+            parsed_params = self._parse_modifiers(params_str)
 
-            # Extract parameters
-            params = parts[2].strip().split()
-
-            threshold = float(params[0]) if params else 0.7
-            cleaner_name = params[1] if len(params) > 1 else "default_cleaning"
-            chunker_name = params[2] if len(params) > 2 else "no_chunking"
-            classifier_name = params[3] if len(params) > 3 else "tuned-sbert"
+            # Extract parameters with defaults
+            threshold = float(parsed_params.get('threshold', 0.7))
+            cleaner_name = parsed_params.get('cleaner', 'default_cleaning')
+            chunker_name = parsed_params.get('chunker', 'no_chunking')
+            classifier_name = parsed_params.get('classifier', 'tuned-sbert')
 
             classifier_rules.append(ClassifierRule(
                 identifier=identifier,
@@ -355,26 +396,41 @@ class SYaraParser:
 
         llm_content = llm_match.group(1)
 
-        # Parse each LLM rule
-        # Format: $identifier = "pattern" llm_name
-        for line in llm_content.split('\n'):
-            line = line.strip()
-            if not line:
+        # Parse each LLM rule - handle both single-line and multi-line patterns
+        # Format: $identifier = "pattern" llm="gpt-4"
+        # Triple-quoted format: $identifier = """pattern""" llm="gpt-4"
+
+        # Match triple-quoted patterns first
+        triple_quote_pattern = r'(\$\w+)\s*=\s*"""(.*?)"""\s*(.*)$'
+        for match in re.finditer(triple_quote_pattern, llm_content, re.MULTILINE | re.DOTALL):
+            identifier = match.group(1)
+            pattern = match.group(2)
+            params_str = match.group(3).strip()
+
+            # Parse key-value parameters only
+            parsed_params = self._parse_modifiers(params_str)
+            llm_name = parsed_params.get('llm', 'flan-t5-large')
+
+            llm_rules.append(LLMRule(
+                identifier=identifier,
+                pattern=pattern,
+                llm_name=llm_name
+            ))
+
+        # Match single-quoted patterns
+        single_quote_pattern = r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)$'
+        for match in re.finditer(single_quote_pattern, llm_content, re.MULTILINE):
+            # Skip if this identifier was already matched by triple-quotes
+            identifier = match.group(1)
+            if any(r.identifier == identifier for r in llm_rules):
                 continue
 
-            parts = line.split('"')
-            if len(parts) < 3:
-                continue
+            pattern = match.group(2)
+            params_str = match.group(3).strip()
 
-            # Extract identifier
-            identifier = parts[0].strip().rstrip('=').strip()
-
-            # Extract pattern
-            pattern = parts[1]
-
-            # Extract LLM name
-            params = parts[2].strip().split()
-            llm_name = params[0] if params else "gpt-oss20b"
+            # Parse key-value parameters only
+            parsed_params = self._parse_modifiers(params_str)
+            llm_name = parsed_params.get('llm', 'flan-t5-large')
 
             llm_rules.append(LLMRule(
                 identifier=identifier,
