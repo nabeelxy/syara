@@ -25,17 +25,10 @@ SYARA helps to write rules in natural language so that they can match similar in
 ## Installation
 
 ```bash
-# Basic installation
+# Library installation
 pip install syara
 
-# With SBERT support (recommended)
-pip install syara[sbert]
-
-# With all features (SBERT, classifiers, LLMs)
-pip install syara[all]
-
-# Development installation
-pip install syara[dev]
+# You may have to install transformers, torch and llm related libraries for semantic rules.
 ```
 
 ## Project Structure
