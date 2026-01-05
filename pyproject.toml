@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "syara"
-version = "0.1.0"
+version = "0.2.3"
 description = "Semantic YARA - YARA-like rules with semantic matching, classification, and LLM evaluation"
 readme = "README.md"
 authors = [
