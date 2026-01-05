@@ -176,12 +176,13 @@ class TestParser:
         assert len(rule.strings) == 1
         assert rule.strings[0].identifier == "$s1"
 
-    def test_parse_similarity_rule(self):
+    def test_parse_similarity_rule_keyvalue(self):
+        """Test new YARA-like key-value parameter format."""
         rule_text = '''
         rule test_similarity
         {
             similarity:
-                $s1 = "test pattern" 0.85 default_cleaning no_chunking sbert
+                $s1 = "test pattern" threshold=0.85 matcher="sbert" cleaner="default_cleaning" chunker="no_chunking"
 
             condition:
                 $s1
@@ -198,14 +199,44 @@ class TestParser:
         assert sim.identifier == "$s1"
         assert sim.threshold == 0.85
         assert sim.matcher_name == "sbert"
+        assert sim.cleaner_name == "default_cleaning"
+        assert sim.chunker_name == "no_chunking"
 
-    def test_parse_phash_rule(self):
+    def test_parse_similarity_rule_keyvalue_minimal(self):
+        """Test key-value format with minimal parameters (defaults)."""
+        rule_text = '''
+        rule test_similarity
+        {
+            similarity:
+                $s1 = "test pattern" threshold=0.75
+
+            condition:
+                $s1
+        }
+        '''
+
+        parser = SYaraParser()
+        rules = parser.parse_string(rule_text)
+
+        assert len(rules) == 1
+        rule = rules[0]
+        assert len(rule.similarity) == 1
+        sim = rule.similarity[0]
+        assert sim.identifier == "$s1"
+        assert sim.threshold == 0.75
+        # Check defaults
+        assert sim.matcher_name == "sbert"
+        assert sim.cleaner_name == "default_cleaning"
+        assert sim.chunker_name == "no_chunking"
+
+    def test_parse_phash_rule_keyvalue(self):
+        """Test new key-value phash format."""
         rule_text = '''
         rule test_phash_images
         {
             phash:
-                $p1 = "reference_logo.png" 0.95 imagehash
-                $p2 = "malicious_icon.png" 0.90 imagehash
+                $p1 = "reference_logo.png" threshold=0.95 hasher="imagehash"
+                $p2 = "malicious_icon.png" threshold=0.90 hasher="imagehash"
 
             condition:
                 $p1 or $p2
@@ -232,6 +263,57 @@ class TestParser:
         assert phash2.file_path == "malicious_icon.png"
         assert phash2.threshold == 0.90
         assert phash2.phash_name == "imagehash"
+
+    def test_parse_classifier_rule_keyvalue(self):
+        """Test new key-value classifier format."""
+        rule_text = '''
+        rule test_classifier
+        {
+            classifier:
+                $c1 = "prompt injection" threshold=0.7 classifier="deberta-prompt-injection"
+
+            condition:
+                $c1
+        }
+        '''
+
+        parser = SYaraParser()
+        rules = parser.parse_string(rule_text)
+
+        assert len(rules) == 1
+        rule = rules[0]
+        assert len(rule.classifier) == 1
+
+        cls = rule.classifier[0]
+        assert cls.identifier == "$c1"
+        assert cls.pattern == "prompt injection"
+        assert cls.threshold == 0.7
+        assert cls.classifier_name == "deberta-prompt-injection"
+
+    def test_parse_llm_rule_keyvalue(self):
+        """Test new key-value LLM format."""
+        rule_text = '''
+        rule test_llm
+        {
+            llm:
+                $l1 = "Check if this is malicious" llm="gpt-4"
+
+            condition:
+                $l1
+        }
+        '''
+
+        parser = SYaraParser()
+        rules = parser.parse_string(rule_text)
+
+        assert len(rules) == 1
+        rule = rules[0]
+        assert len(rule.llm) == 1
+
+        llm = rule.llm[0]
+        assert llm.identifier == "$l1"
+        assert llm.pattern == "Check if this is malicious"
+        assert llm.llm_name == "gpt-4"
 
 
 if __name__ == "__main__":
