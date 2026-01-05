@@ -14,15 +14,19 @@ class SYaraCompiler:
     Compiles rules into an executable format.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, config_manager: Optional[ConfigManager] = None):
         """
         Initialize compiler.
 
         Args:
             config_path: Path to configuration YAML file
+            config_manager: Pre-configured ConfigManager instance (overrides config_path if provided)
         """
         self.parser = SYaraParser()
-        self.config_manager = ConfigManager(config_path)
+        if config_manager is not None:
+            self.config_manager = config_manager
+        else:
+            self.config_manager = ConfigManager(config_path)
 
     def compile(self, filepath: str) -> CompiledRules:
         """
@@ -202,13 +206,14 @@ class SYaraCompiler:
 
 
 # Convenience function for direct compilation
-def compile(filepath: str, config_path: Optional[str] = None) -> CompiledRules:
+def compile(filepath: str, config_path: Optional[str] = None, config_manager: Optional[ConfigManager] = None) -> CompiledRules:
     """
     Compile a .syara rule file.
 
     Args:
         filepath: Path to .syara file
         config_path: Optional path to configuration file
+        config_manager: Optional pre-configured ConfigManager instance (overrides config_path if provided)
 
     Returns:
         CompiledRules object
@@ -217,6 +222,11 @@ def compile(filepath: str, config_path: Optional[str] = None) -> CompiledRules:
         >>> import syara
         >>> rules = syara.compile('rules.syara')
         >>> matches = rules.match("some text to check")
+
+        # Or with a custom config manager
+        >>> config = syara.ConfigManager()
+        >>> config.config.classifiers['my-classifier'] = my_classifier_instance
+        >>> rules = syara.compile('rules.syara', config_manager=config)
     """
-    compiler = SYaraCompiler(config_path)
+    compiler = SYaraCompiler(config_path, config_manager)
     return compiler.compile(filepath)
