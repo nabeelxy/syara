@@ -92,7 +92,7 @@ rule prompt_injection_detection: message
         $s1 = /\b(disregard|ignore)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|orders|prompts)\b/i
 
     similarity:
-        $s2 = "ignore previous instructions" 0.8 default_cleaning no_chunking sbert
+        $s2 = "ignore previous instructions" threshold=0.8 matcher="sbert"
     
     condition:
         $s1 or $s2
@@ -100,9 +100,9 @@ rule prompt_injection_detection: message
 ```
 
 Let's break down what it does:
-* There are two rules: one from traditional YARA string rule ($s1) and semantic rule introduced in SYARA ($s1)
+* There are two rules: one from traditional YARA string rule ($s1) and semantic rule introduced in SYARA ($s2)
 * strings rule looks for prompt injection pattern by performing a regular expression matching.
-* similarity rule looks for prompt injections by performing a semantic matching using SBERT to detect sentences similar to the one in the rule. If the matching is no less than 0.8, the rule returns True.
+* similarity rule looks for prompt injections by performing a semantic matching using SBERT to detect sentences similar to the one in the rule. If the matching score is at least 0.8 (threshold=0.8), the rule returns True.
 * Based on the smart cost optimization, the rule engine first executes $s1 and executes the second rule only if the first one is false.
 * If either of the rule matches, this SYARA rule is deemed matched.
 
@@ -124,13 +124,13 @@ rule indirect_prompt_injection_detection: html
         $s2 = /\b(disregard|ignore)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|orders|prompts)\b/i
 
     similarity:
-        $s3 = "ignore previous instructions" 0.8 default_cleaning text_chunking sbert
+        $s3 = "ignore previous instructions" threshold=0.8 cleaner="default_cleaning" chunker="text_chunking" matcher="sbert"
 
     classifier:
-        $s4 = "ignore previous instructions" 0.7 default_cleaning text_chunking tuned-sbert
+        $s4 = "ignore previous instructions" threshold=0.7 cleaner="default_cleaning" chunker="text_chunking" classifier="tuned-sbert"
 
     llm:
-        $s5 = "ignore previous instructions" flan-t5-large
+        $s5 = "ignore previous instructions" llm="flan-t5-large"
     
     condition:
         $s1 and ($s2 or $s3 or $s4 or $s5)
@@ -172,6 +172,8 @@ for match in matches:
 
 Traditional YARA supports only string rules. **SYara extends this with additional rule types**:
 
+> **Note on Syntax**: SYARA uses YARA-like **key-value parameter syntax** (e.g., `threshold=0.8 matcher="sbert"`). Parameters are order-independent and use explicit names for clarity. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for migrating from older positional syntax.
+
 ### Text-Based Rules
 
 These rules work with natural language text input:
@@ -183,32 +185,32 @@ These rules work with natural language text input:
 - **Cost**: Very low (fastest)
 
 #### 2. Similarity Rules (Semantic Matching)
-- **Syntax**: `$identifier = "pattern" threshold cleaner chunker matcher`
-- **Example**: `$s3 = "ignore previous instructions" 0.8 default_cleaning no_chunking sbert`
-- **Parameters**:
-  - `threshold` (0.0-1.0): Similarity score threshold for matching
-  - `cleaner`: Text preprocessing strategy (default: `default_cleaning`)
-  - `chunker`: Text chunking strategy (default: `no_chunking`)
-  - `matcher`: Embedding model name (default: `sbert`)
+- **Syntax**: `$identifier = "pattern" threshold=<float> matcher="<name>" [cleaner="<name>"] [chunker="<name>"]`
+- **Example**: `$s3 = "ignore previous instructions" threshold=0.8 matcher="sbert"`
+- **Parameters** (order-independent key-value pairs):
+  - `threshold=<float>` (0.0-1.0): Similarity score threshold for matching (required)
+  - `matcher="<name>"`: Embedding model name (required, e.g., `"sbert"`)
+  - `cleaner="<name>"`: Text preprocessing strategy (optional, default: `"default_cleaning"`)
+  - `chunker="<name>"`: Text chunking strategy (optional, default: `"no_chunking"`)
 - **Cost**: Moderate
 - **Customization**: Create custom matchers by extending `SemanticMatcher` class
 
 #### 3. Classifier Rules (ML Classification)
-- **Syntax**: `$identifier = "pattern" threshold cleaner chunker classifier`
-- **Example**: `$s4 = "ignore previous instructions" 0.7 default_cleaning no_chunking tuned-sbert`
-- **Parameters**:
-  - `threshold` (0.0-1.0): Classification confidence threshold
-  - `cleaner`: Text preprocessing strategy
-  - `chunker`: Text chunking strategy
-  - `classifier`: Classifier model name (default: `tuned-sbert`)
+- **Syntax**: `$identifier = "pattern" threshold=<float> classifier="<name>" [cleaner="<name>"] [chunker="<name>"]`
+- **Example**: `$s4 = "ignore previous instructions" threshold=0.7 classifier="tuned-sbert"`
+- **Parameters** (order-independent key-value pairs):
+  - `threshold=<float>` (0.0-1.0): Classification confidence threshold (required)
+  - `classifier="<name>"`: Classifier model name (required, e.g., `"tuned-sbert"`)
+  - `cleaner="<name>"`: Text preprocessing strategy (optional, default: `"default_cleaning"`)
+  - `chunker="<name>"`: Text chunking strategy (optional, default: `"no_chunking"`)
 - **Cost**: Higher than similarity
 - **Customization**: Create custom classifiers by extending `SemanticClassifier` class
 
 #### 4. LLM Rules (Language Model Evaluation)
-- **Syntax**: `$identifier = "pattern" llm_name`
-- **Example**: `$s5 = "ignore previous instructions" flan-t5-large`
-- **Parameters**:
-  - `llm_name`: LLM evaluator name (e.g., `flan-t5-large`, `gpt-4`, `openai`)
+- **Syntax**: `$identifier = "pattern" llm="<name>"`
+- **Example**: `$s5 = "ignore previous instructions" llm="flan-t5-large"`
+- **Parameters** (order-independent key-value pairs):
+  - `llm="<name>"`: LLM evaluator name (required, e.g., `"flan-t5-large"`, `"gpt-4"`, `"openai"`)
 - **Cost**: Highest (most expensive)
 - **Customization**: Create custom LLM evaluators by extending `LLMEvaluator` class
 
@@ -217,12 +219,12 @@ These rules work with natural language text input:
 These rules work with binary file input (images, audio, video):
 
 #### PHash Rules (Perceptual Hash Matching)
-- **Syntax**: `$identifier = "reference_file_path" threshold phash_type`
-- **Example**: `$p1 = "malicious_logo.png" 0.9 imagehash`
-- **Parameters**:
-  - `reference_file_path`: Path to reference file to match against
-  - `threshold` (0.0-1.0): Similarity score threshold (based on normalized Hamming distance)
-  - `phash_type`: Hash algorithm - `imagehash` (images), `audiohash` (audio), `videohash` (video)
+- **Syntax**: `$identifier = "reference_file_path" threshold=<float> hasher="<type>"`
+- **Example**: `$p1 = "malicious_logo.png" threshold=0.9 hasher="imagehash"`
+- **Parameters** (order-independent key-value pairs):
+  - First positional argument: Path to reference file to match against (required)
+  - `threshold=<float>` (0.0-1.0): Similarity score threshold based on normalized Hamming distance (required)
+  - `hasher="<type>"`: Hash algorithm - `"imagehash"` (images), `"audiohash"` (audio), `"videohash"` (video) (required)
 - **Cost**: Moderate-to-high
 - **Customization**: Create custom phash matchers by extending `PHashMatcher` class
 - **Use Case**: Detecting near-duplicate or similar binary content (malicious images, audio fingerprints, video clips)
