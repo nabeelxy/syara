@@ -16,6 +16,7 @@ SYARA helps to write rules in natural language so that they can match similar in
 - **Semantic Similarity Matching**: Using SBERT and other embedding models
 - **Classification Rules**: Fine-tuned models for precise pattern detection
 - **LLM Evaluation**: Dynamic semantic matching using language models
+- **Multi-Modal Rules**: pHash based image/audio/video pattern matching
 - **Text Preprocessing**: Customizable cleaning and chunking strategies
 - **Cost Optimization**: Automatic execution ordering (strings → similarity → classifier → LLM)
 - **Extensible**: Easy to create custom matchers, classifiers, and LLM evaluators
@@ -136,7 +137,7 @@ rule indirect_prompt_injection_detection: html
         $s4 = "ignore previous instructions" 0.7 default_cleaning text_chunking tuned-sbert
 
     llm:
-        $s5 = "ignore previous instructions" gpt-oss20b
+        $s5 = "ignore previous instructions" flan-t5-large
     
     condition:
         $s1 and ($s2 or $s3 or $s4 or $s5)
@@ -212,9 +213,9 @@ These rules work with natural language text input:
 
 #### 4. LLM Rules (Language Model Evaluation)
 - **Syntax**: `$identifier = "pattern" llm_name`
-- **Example**: `$s5 = "ignore previous instructions" gpt-oss20b`
+- **Example**: `$s5 = "ignore previous instructions" flan-t5-large`
 - **Parameters**:
-  - `llm_name`: LLM evaluator name (e.g., `gpt-oss20b`, `gpt-4`, `openai`)
+  - `llm_name`: LLM evaluator name (e.g., `flan-t5-large`, `gpt-4`, `openai`)
 - **Cost**: Highest (most expensive)
 - **Customization**: Create custom LLM evaluators by extending `LLMEvaluator` class
 
@@ -281,7 +282,7 @@ default_chunker: no_chunking
 default_matcher: sbert
 default_phash: imagehash
 default_classifier: tuned-sbert
-default_llm: gpt-oss20b
+default_llm: flan-t5-large
 
 # Register custom components
 matchers:
