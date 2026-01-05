@@ -1,5 +1,6 @@
 // Sample SYara PHash Rules for Binary Files (Images)
 // These rules detect malicious or suspicious images using perceptual hashing
+// NEW: Uses YARA-like key-value syntax for better readability
 
 rule malicious_logo_detection: malware image
 {
@@ -11,9 +12,10 @@ rule malicious_logo_detection: malware image
         verdict = "malicious"
 
     phash:
-        $p1 = "reference_images/phishing_logo_1.png" 0.95 imagehash
-        $p2 = "reference_images/phishing_logo_2.png" 0.95 imagehash
-        $p3 = "reference_images/malware_icon.png" 0.90 imagehash
+        // NEW YARA-LIKE SYNTAX: Order-independent key-value parameters
+        $p1 = "reference_images/phishing_logo_1.png" threshold=0.95 hasher="imagehash"
+        $p2 = "reference_images/phishing_logo_2.png" threshold=0.95 hasher="imagehash"
+        $p3 = "reference_images/malware_icon.png" threshold=0.90 hasher="imagehash"
 
     condition:
         any of ($p*)
@@ -28,8 +30,9 @@ rule duplicate_malware_screenshot: malware image
         confidence = "medium"
 
     phash:
-        $p1 = "reference_images/ransomware_screen.png" 0.85 imagehash
-        $p2 = "reference_images/fake_update_screen.png" 0.85 imagehash
+        // YARA-LIKE SYNTAX: Explicit parameter names for clarity
+        $p1 = "reference_images/ransomware_screen.png" threshold=0.85 hasher="imagehash"
+        $p2 = "reference_images/fake_update_screen.png" threshold=0.85 hasher="imagehash"
 
     condition:
         $p1 or $p2
@@ -43,8 +46,9 @@ rule suspicious_qr_code: suspicious image
         date = "2025-12-28"
 
     phash:
-        $qr1 = "reference_images/phishing_qr_1.png" 0.80 imagehash
-        $qr2 = "reference_images/phishing_qr_2.png" 0.80 imagehash
+        // YARA-LIKE SYNTAX: Much more readable than positional parameters
+        $qr1 = "reference_images/phishing_qr_1.png" threshold=0.80 hasher="imagehash"
+        $qr2 = "reference_images/phishing_qr_2.png" threshold=0.80 hasher="imagehash"
 
     condition:
         any of ($qr*)
