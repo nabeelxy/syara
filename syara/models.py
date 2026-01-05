@@ -50,7 +50,7 @@ class LLMRule:
     """Represents an LLM-based evaluation rule."""
     identifier: str  # e.g., "$s5"
     pattern: str
-    llm_name: str = "gpt-oss20b"
+    llm_name: str = "flan-t5-large"
 
 
 @dataclass
