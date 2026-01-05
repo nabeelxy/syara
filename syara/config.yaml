@@ -7,7 +7,7 @@ default_chunker: no_chunking
 default_matcher: sbert
 default_phash: imagehash
 default_classifier: tuned-sbert
-default_llm: gpt-oss20b
+default_llm: flan-t5-large
 
 # Text cleaners - preprocessing strategies
 cleaners:
@@ -40,7 +40,8 @@ classifiers:
 
 # LLM evaluators - language models for semantic evaluation
 llms:
-  gpt-oss20b: syara.engine.llm_evaluator.OSSLLMEvaluator
+  flan-t5-large: syara.engine.llm_evaluator.OSSLLMEvaluator
+  gpt-oss20b: syara.engine.llm_evaluator.OSSLLMEvaluator  # Legacy alias
   gpt-4: syara.engine.llm_evaluator.OpenAIEvaluator
   openai: syara.engine.llm_evaluator.OpenAIEvaluator
 
@@ -51,7 +52,10 @@ api_keys:
 
 # LLM-specific configurations
 llm_configs:
-  gpt-oss20b:
+  flan-t5-large:
+    model: google/flan-t5-large
+    endpoint: http://localhost:8000
+  gpt-oss20b:  # Legacy alias
     model: google/flan-t5-large
     endpoint: http://localhost:8000
   gpt-4:
