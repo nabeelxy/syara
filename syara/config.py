@@ -17,7 +17,7 @@ class Config:
     default_matcher: str = "sbert"
     default_phash: str = "imagehash"
     default_classifier: str = "tuned-sbert"
-    default_llm: str = "gpt-oss20b"
+    default_llm: str = "flan-t5-large"
     cleaners: Dict[str, str] = field(default_factory=dict)
     chunkers: Dict[str, str] = field(default_factory=dict)
     matchers: Dict[str, str] = field(default_factory=dict)
@@ -72,7 +72,7 @@ class ConfigManager:
             default_matcher=data.get('default_matcher', 'sbert'),
             default_phash=data.get('default_phash', 'imagehash'),
             default_classifier=data.get('default_classifier', 'tuned-sbert'),
-            default_llm=data.get('default_llm', 'gpt-oss20b'),
+            default_llm=data.get('default_llm', 'flan-t5-large'),
             cleaners=data.get('cleaners', {}),
             chunkers=data.get('chunkers', {}),
             matchers=data.get('matchers', {}),
@@ -111,7 +111,8 @@ class ConfigManager:
                 'tuned-sbert': 'syara.engine.classifier.TunedSBERTClassifier',
             },
             llms={
-                'gpt-oss20b': 'syara.engine.llm_evaluator.OSSLLMEvaluator',
+                'flan-t5-large': 'syara.engine.llm_evaluator.OSSLLMEvaluator',
+                'gpt-oss20b': 'syara.engine.llm_evaluator.OSSLLMEvaluator',  # Legacy alias
                 'gpt-4': 'syara.engine.llm_evaluator.OpenAIEvaluator',
                 'openai': 'syara.engine.llm_evaluator.OpenAIEvaluator',
             },
@@ -181,11 +182,16 @@ class ConfigManager:
         if name in self._matcher_cache:
             return self._matcher_cache[name]
 
-        class_path = self.config.matchers.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.matchers.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown matcher: {name}")
 
-        instance = self._instantiate_class(class_path)
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            instance = class_path_or_instance
+
         self._matcher_cache[name] = instance
         return instance
 
@@ -213,11 +219,17 @@ class ConfigManager:
         if name in self._classifier_cache:
             return self._classifier_cache[name]
 
-        class_path = self.config.classifiers.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.classifiers.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown classifier: {name}")
 
-        instance = self._instantiate_class(class_path)
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            # Already an instance
+            instance = class_path_or_instance
+
         self._classifier_cache[name] = instance
         return instance
 
@@ -229,26 +241,32 @@ class ConfigManager:
         if name in self._llm_cache:
             return self._llm_cache[name]
 
-        class_path = self.config.llms.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.llms.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown LLM: {name}")
 
-        # Get LLM-specific config
-        llm_config = self.config.llm_configs.get(name, {})
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            # Get LLM-specific config
+            llm_config = self.config.llm_configs.get(name, {})
 
-        # Get API key if specified
-        api_key = self.config.api_keys.get('openai', '') if 'openai' in class_path.lower() else None
+            # Get API key if specified
+            api_key = self.config.api_keys.get('openai', '') if 'openai' in class_path_or_instance.lower() else None
 
-        # Instantiate with config
-        kwargs = {}
-        if 'model' in llm_config:
-            kwargs['model_name'] = llm_config['model']
-        if 'endpoint' in llm_config:
-            kwargs['endpoint'] = llm_config['endpoint']
-        if api_key:
-            kwargs['api_key'] = api_key
+            # Instantiate with config
+            kwargs = {}
+            if 'model' in llm_config:
+                kwargs['model_name'] = llm_config['model']
+            if 'endpoint' in llm_config:
+                kwargs['endpoint'] = llm_config['endpoint']
+            if api_key:
+                kwargs['api_key'] = api_key
 
-        instance = self._instantiate_class(class_path, **kwargs) if kwargs else self._instantiate_class(class_path)
+            instance = self._instantiate_class(class_path_or_instance, **kwargs) if kwargs else self._instantiate_class(class_path_or_instance)
+        else:
+            # Already an instance
+            instance = class_path_or_instance
+
         self._llm_cache[name] = instance
         return instance
 
