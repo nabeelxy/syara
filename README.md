@@ -24,7 +24,7 @@ SYARA helps to write rules in natural language so that they can match similar in
 - **Extensible**: Easy to create custom matchers, classifiers, and LLM evaluators
 - **Session Caching**: Efficient text preprocessing with automatic cache management
 
-![Demo](https://www.youtube.com/watch?v=jaqUzLPclBk)
+[![Demo](https://img.youtube.com/vi/jaqUzLPclBk/0.jpg)](https://www.youtube.com/watch?v=jaqUzLPclBk)
 
 ## Installation
 
