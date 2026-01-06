@@ -10,7 +10,7 @@ YARA rules are a powerful technique to hunt malware, malicious content and any s
 
 SYARA helps to write rules in natural language so that they can match similar intents semantically. It supports rules which can detect malicious intent with high recall and precision by leveraging embeddings, classifiers, and LLM models. This helps to write SYARA rules to detect phishing, prompt injection, jailbreak attempts, hullicination, disinformation, and other similar scenarios.
 
-![Overall Workflow](media/yara_design.png)
+![Overall Workflow](https://github.com/nabeelxy/syara/blob/main/media/syara_design.png)
 
 ## Features
 
