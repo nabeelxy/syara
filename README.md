@@ -24,6 +24,7 @@ SYARA helps to write rules in natural language so that they can match similar in
 - **Extensible**: Easy to create custom matchers, classifiers, and LLM evaluators
 - **Session Caching**: Efficient text preprocessing with automatic cache management
 
+![Demo](https://github.com/nabeelxy/syara/blob/main/media/superyara_semantic_rule_engine.mp4)
 ## Installation
 
 ```bash
