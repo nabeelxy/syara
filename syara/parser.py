@@ -252,13 +252,20 @@ class SYaraParser:
 
         sim_content = sim_match.group(1)
 
-        # Parse each similarity rule
+        # Parse each similarity rule, joining continuation lines onto their rule line
         # Format: $identifier = "pattern" threshold=0.8 matcher="sbert" cleaner="default" chunker="sentence"
+        # Continuation lines (not starting with $) are joined to the preceding rule line
+        joined_lines = []
         for line in sim_content.split('\n'):
             line = line.strip()
             if not line:
                 continue
+            if line.startswith('$'):
+                joined_lines.append(line)
+            elif joined_lines:
+                joined_lines[-1] += ' ' + line
 
+        for line in joined_lines:
             # Match: $identifier = "pattern" parameters
             match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
             if not match:
