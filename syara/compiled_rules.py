@@ -223,22 +223,31 @@ class CompiledRules:
         """
         Determine if an identifier needs to be evaluated based on condition.
 
-        This enables short-circuit evaluation for expensive operations.
+        Uses optimistic short-circuit evaluation: assume this identifier would
+        match (best case), then evaluate the full condition with the current
+        pattern_matches.  If the condition is still False even with the
+        identifier set to True, the identifier cannot affect the outcome and
+        can be skipped — avoiding expensive LLM calls when a required
+        pre-filter pattern has already failed.
 
         Args:
-            identifier: Pattern identifier (e.g., "$s5")
+            identifier: Pattern identifier (e.g., "$llm_rule")
             condition: Condition string
             current_matches: Already evaluated patterns
 
         Returns:
-            True if identifier might be needed, False if can skip
+            True if the identifier might change the outcome, False if safe to skip
         """
-        # Simple heuristic: if identifier appears in condition, it might be needed
-        # More sophisticated would parse condition as AST and evaluate lazily
+        # Optimistically assume this identifier matches
+        test_matches = dict(current_matches)
+        test_matches[identifier] = [MatchDetail(identifier=identifier, matched_text="")]
 
-        # For now, always execute (conservative approach)
-        # TODO: Implement smart short-circuit evaluation
-        return True
+        try:
+            test_expr = self._translate_yara_condition(condition, test_matches)
+            result = eval(test_expr, {"__builtins__": {}}, {})
+            return bool(result)
+        except Exception:
+            return True  # conservative: evaluate if unsure
 
     def _evaluate_condition(
         self,
@@ -293,12 +302,39 @@ class CompiledRules:
         Returns:
             Python boolean expression string
         """
-        eval_expr = condition
+        # Normalize whitespace: collapse newlines/tabs to single spaces so that
+        # eval() can handle multi-line conditions from .syara files.
+        eval_expr = re.sub(r'\s+', ' ', condition).strip()
 
-        # Handle "any of" and "all of" patterns
-        # Pattern: any of ($identifier*) or all of ($identifier*)
+        # Handle "any of them" / "all of them" — refers to ALL defined identifiers
+        for match in re.finditer(r'any\s+of\s+them', eval_expr, re.IGNORECASE):
+            all_ids = list(pattern_matches.keys())
+            if all_ids:
+                replacement = "(" + " or ".join(
+                    str(len(pattern_matches[i]) > 0) for i in all_ids
+                ) + ")"
+            else:
+                replacement = "False"
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
+        for match in re.finditer(r'all\s+of\s+them', eval_expr, re.IGNORECASE):
+            all_ids = list(pattern_matches.keys())
+            if all_ids:
+                replacement = "(" + " and ".join(
+                    str(len(pattern_matches[i]) > 0) for i in all_ids
+                ) + ")"
+            else:
+                replacement = "False"
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
+        # Handle "any of" and "all of" wildcard patterns.
+        # Two forms supported:
+        #   any of ($prefix*)   — parens wrap the wildcard
+        #   any of $prefix*     — bare wildcard (e.g. inside outer parentheses)
         any_of_pattern = r'any\s+of\s+\(\s*(\$\w+)\*\s*\)'
+        any_of_bare    = r'any\s+of\s+(\$\w+)\*'
         all_of_pattern = r'all\s+of\s+\(\s*(\$\w+)\*\s*\)'
+        all_of_bare    = r'all\s+of\s+(\$\w+)\*'
 
         # Replace "any of ($prefix*)" with OR of matching identifiers
         for match in re.finditer(any_of_pattern, eval_expr, re.IGNORECASE):
@@ -318,6 +354,18 @@ class CompiledRules:
 
             eval_expr = eval_expr.replace(match.group(0), replacement)
 
+        # Replace bare "any of $prefix*" (no parens around wildcard)
+        for match in re.finditer(any_of_bare, eval_expr, re.IGNORECASE):
+            prefix = match.group(1)
+            matching_ids = [id for id in pattern_matches.keys() if id.startswith(prefix)]
+            if matching_ids:
+                replacement = "(" + " or ".join(
+                    str(len(pattern_matches[i]) > 0) for i in matching_ids
+                ) + ")"
+            else:
+                replacement = "False"
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
         # Replace "all of ($prefix*)" with AND of matching identifiers
         for match in re.finditer(all_of_pattern, eval_expr, re.IGNORECASE):
             prefix = match.group(1)
@@ -334,6 +382,18 @@ class CompiledRules:
             else:
                 replacement = "False"
 
+            eval_expr = eval_expr.replace(match.group(0), replacement)
+
+        # Replace bare "all of $prefix*" (no parens around wildcard)
+        for match in re.finditer(all_of_bare, eval_expr, re.IGNORECASE):
+            prefix = match.group(1)
+            matching_ids = [id for id in pattern_matches.keys() if id.startswith(prefix)]
+            if matching_ids:
+                replacement = "(" + " and ".join(
+                    str(len(pattern_matches[i]) > 0) for i in matching_ids
+                ) + ")"
+            else:
+                replacement = "False"
             eval_expr = eval_expr.replace(match.group(0), replacement)
 
         # Find all remaining simple identifiers in condition
