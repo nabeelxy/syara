@@ -50,28 +50,29 @@ syara/
 │   ├── config.yaml                # Default configuration
 │   └── engine/                    # Pattern matching engines
 │       ├── __init__.py
-│       ├── string_matcher.py     # String/regex matching
+│       ├── string_matcher.py     # String/regex matching (incl. wide modifier)
 │       ├── semantic_matcher.py   # SBERT and custom semantic matchers
-│       ├── classifier.py         # ML classifiers (TunedSBERTClassifier)
+│       ├── classifier.py         # ML classifiers (TunedSBERTClassifier, DistilBERTClassifier)
 │       ├── llm_evaluator.py      # LLM evaluators (OpenAI, OSS models)
-│       ├── phash_matcher.py      # Perceptual hash for binary files
+│       ├── phash_matcher.py      # Perceptual hash for images, audio, and video
 │       ├── cleaner.py            # Text preprocessing (DefaultCleaner, etc.)
 │       └── chunker.py            # Text chunking strategies
 │
-├── examples/                       # Usage examples
+├── examples/                       # Usage examples and demo components
 │   ├── basic_usage.py             # Basic rule compilation and matching
 │   ├── custom_matcher.py          # Creating custom semantic matchers
+│   ├── syara_components.py        # Example-specific classifiers, cleaners, and LLMs
 │   ├── sample_rules.syara         # Text-based rules (strings, similarity, etc.)
-│   └── image_rules.syara          # Binary file rules (phash for images)
+│   ├── unprompted_clickfix.syara  # ClickFix attack detection rule
+│   ├── unprompted_brand.syara     # Brand phishing detection rule
+│   ├── run_clickfix_rule.py       # Runner for ClickFix rule
+│   ├── run_brand_rule.py          # Runner for brand phishing rule
+│   └── benchmark_clickfix.py      # ClickFix detection benchmark (500 samples)
 │
 ├── tests/                          # Test suite
-│   ├── test_basic.py              # Basic unit tests
-│   ├── test_compiler.py           # Compiler tests
-│   ├── test_matchers.py           # Matcher tests
-│   ├── test_parser.py             # Parser tests
-│   └── test_integration.py        # Integration tests
+│   ├── test_basic.py              # Core unit tests
+│   └── test_library.py            # Extended library tests (187 tests)
 │
-├── verify_install.py               # Installation verification script
 ├── pyproject.toml                  # Package configuration and dependencies
 ├── README.md                       # This file
 └── LICENSE                         # MIT License
@@ -184,8 +185,12 @@ These rules work with natural language text input:
 
 #### 1. Strings Rules (Traditional YARA)
 - **Syntax**: `$identifier = "pattern"` or `$identifier = /regex/i`
-- **Modifiers**: `nocase`, `wide`, `dotall`, `multiline`
-- Any regular expression pattern
+- **Modifiers**:
+  - `nocase` / `i` — case-insensitive matching
+  - `wide` — match the UTF-16LE (null-byte-interleaved) form of the pattern; combine with `ascii` to match both forms
+  - `dotall` / `s` — `.` matches newlines
+  - `multiline` / `m` — `^`/`$` match line boundaries
+- Regex patterns support quantifiers such as `{n,m}` without parser restrictions
 - **Cost**: Very low (fastest)
 
 #### 2. Similarity Rules (Semantic Matching)
@@ -211,10 +216,12 @@ These rules work with natural language text input:
 - **Customization**: Create custom classifiers by extending `SemanticClassifier` class
 
 #### 4. LLM Rules (Language Model Evaluation)
-- **Syntax**: `$identifier = "pattern" llm="<name>"`
+- **Syntax**: `$identifier = "pattern" llm="<name>" [cleaner="<name>"] [chunker="<name>"]`
 - **Example**: `$s5 = "ignore previous instructions" llm="flan-t5-large"`
 - **Parameters** (order-independent key-value pairs):
   - `llm="<name>"`: LLM evaluator name (required, e.g., `"flan-t5-large"`, `"gpt-4"`, `"openai"`)
+  - `cleaner="<name>"`: Text preprocessing strategy (optional, default: `"no_op"`)
+  - `chunker="<name>"`: Text chunking strategy (optional, default: `"no_chunking"`)
 - **Cost**: Highest (most expensive)
 - **Customization**: Create custom LLM evaluators by extending `LLMEvaluator` class
 
@@ -228,7 +235,10 @@ These rules work with binary file input (images, audio, video):
 - **Parameters** (order-independent key-value pairs):
   - First positional argument: Path to reference file to match against (required)
   - `threshold=<float>` (0.0-1.0): Similarity score threshold based on normalized Hamming distance (required)
-  - `hasher="<type>"`: Hash algorithm - `"imagehash"` (images), `"audiohash"` (audio), `"videohash"` (video) (required)
+  - `hasher="<type>"`: Hash algorithm (required):
+    - `"imagehash"` — dHash for images (requires Pillow)
+    - `"audiohash"` — dHash-style fingerprint for PCM WAV files (stdlib `wave`, no extra deps)
+    - `"videohash"` — content fingerprint from evenly-sampled file bytes (no extra deps)
 - **Cost**: Moderate-to-high
 - **Customization**: Create custom phash matchers by extending `PHashMatcher` class
 - **Use Case**: Detecting near-duplicate or similar binary content (malicious images, audio fingerprints, video clips)
@@ -282,6 +292,12 @@ default_matcher: sbert
 default_phash: imagehash
 default_classifier: tuned-sbert
 default_llm: flan-t5-large
+
+# Built-in classifiers
+classifiers:
+  tuned-sbert: syara.engine.classifier.TunedSBERTClassifier
+  distilbert: syara.engine.classifier.DistilBERTClassifier
+  my_custom_classifier: mymodule.CustomClassifier
 
 # Register custom components
 matchers:
@@ -392,6 +408,43 @@ class MyCustomLLM(LLMEvaluator):
         return is_match, explanation
 ```
 
+### Using Example-Specific Components
+
+Specialized components used only in demos (HTML cleaner, phishing/ClickFix classifiers, Gemini LLM) live in `examples/syara_components.py` rather than the core library. Use the provided helper to load them:
+
+```python
+import syara
+from syara_components import get_example_config_manager  # in examples/
+
+cfg = get_example_config_manager()   # registers html-text, deberta-clickfix, gemini, etc.
+rules = syara.compile('examples/unprompted_clickfix.syara', config_manager=cfg)
+matches = rules.match(html_content)
+```
+
+### Training a Classifier
+
+`TunedSBERTClassifier` supports calibration from labeled examples. Call `train()` before using the classifier in rules:
+
+```python
+from syara.engine.classifier import TunedSBERTClassifier
+
+clf = TunedSBERTClassifier()
+
+# Examples: (rule_text, input_text, is_match)
+examples = [
+    ("ignore previous instructions", "Disregard all prior prompts", True),
+    ("ignore previous instructions", "What is the weather today?", False),
+    # ... more examples
+]
+
+clf.train(examples)   # calibrates threshold_boost for optimal accuracy
+
+# Register the trained classifier and use it in rules
+cfg = syara.ConfigManager()
+cfg.config.classifiers["my-tuned"] = clf
+rules = syara.compile("rules.syara", config_manager=cfg)
+```
+
 ## Session Caching
 
 SYARA automatically caches cleaned text during rule execution:
@@ -405,9 +458,12 @@ No manual cache management needed!
 ## Examples
 
 See the [examples/](examples/) directory for:
-- [basic_usage.py](examples/basic_usage.py) - Basic rule compilation and matching
-- [custom_matcher.py](examples/custom_matcher.py) - Creating custom semantic matchers
-- [sample_rules.syara](examples/sample_rules.syara) - Example rules for prompt injection detection
+- [basic_usage.py](examples/basic_usage.py) — Basic rule compilation and matching
+- [custom_matcher.py](examples/custom_matcher.py) — Creating custom semantic matchers
+- [sample_rules.syara](examples/sample_rules.syara) — Example rules for prompt injection detection
+- [syara_components.py](examples/syara_components.py) — Example-specific components (HTML cleaner, phishing classifier, ClickFix classifier, Gemini LLM) with a `get_example_config_manager()` helper for use with `syara.compile(..., config_manager=...)`
+- [unprompted_clickfix.syara](examples/unprompted_clickfix.syara) + [run_clickfix_rule.py](examples/run_clickfix_rule.py) — End-to-end ClickFix attack detection
+- [unprompted_brand.syara](examples/unprompted_brand.syara) + [run_brand_rule.py](examples/run_brand_rule.py) — Brand phishing detection
 
 ## Use Cases
 
