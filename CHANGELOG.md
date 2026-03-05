@@ -5,6 +5,32 @@ All notable changes to SYARA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-03-04
+
+### Added
+- **`wide` modifier fully implemented** — literal strings are searched in their UTF-16LE (null-byte-interleaved) form; regex patterns are matched against null-stripped text (best-effort). Combine with `ascii` to match both encodings simultaneously.
+- **`cleaner` and `chunker` parameters for LLM rules** — LLM rules now support the same `cleaner="<name>"` and `chunker="<name>"` parameters as similarity and classifier rules (defaults: `no_op` and `no_chunking` to preserve prior behaviour).
+- **`distilbert` classifier registered** — `DistilBERTClassifier` is now available as `classifier="distilbert"` in both `config.yaml` and the programmatic default config.
+- **`AudioHashMatcher.compute_hash()` implemented** — uses the stdlib `wave` module to fingerprint PCM WAV files with a dHash-style 64-bit hash (no extra dependencies).
+- **`VideoHashMatcher.compute_hash()` implemented** — produces a deterministic 64-bit content fingerprint by sampling raw bytes at evenly-spaced offsets (no extra dependencies).
+- **`TunedSBERTClassifier.train()` implemented** — calibrates `threshold_boost` from labeled `(rule_text, input_text, is_match)` examples by finding the optimal similarity cutpoint and mapping it to a 0.5 reference threshold.
+- **`examples/syara_components.py`** — new file collecting example-specific components (`HTMLTextCleaner`, `BERTPhishingClassifier`, `DeBERTaClickFixClassifier`, `GeminiLLMEvaluator`) with a `get_example_config_manager()` helper, keeping the core library dependency-free.
+- **187 library tests** in `tests/test_library.py` covering all previously untested code paths.
+
+### Fixed
+- **Regex quantifiers `{n,m}` in rule bodies** — `_split_rules` in the parser was replaced with a brace-counting algorithm that correctly handles `{n,m}` quantifiers inside regex patterns, quoted strings, and triple-quoted LLM prompts.
+- **`all of them` / `all of ($prefix*)` condition** — previously evaluated only identifiers that had matches, silently treating missing identifiers as vacuously true. Now all pattern identifiers are pre-seeded with empty lists before matching, so `all of them` correctly returns `False` when any pattern produced no matches.
+- **Pre-instantiated objects in `get_cleaner()`, `get_chunker()`, `get_phash_matcher()`** — these three methods were missing the `isinstance(v, str)` guard that `get_matcher()`, `get_classifier()`, and `get_llm()` already had. Registering a live object instance now works correctly for all component types.
+- **Condition evaluation failure** — replaced `print()` with `warnings.warn(UserWarning)` so failed condition evaluations surface through Python's standard warning mechanism instead of printing to stdout.
+
+### Changed
+- Example-specific classes (`BERTPhishingClassifier`, `DeBERTaClickFixClassifier`, `GeminiLLMEvaluator`, `HTMLTextCleaner`) moved from the core library (`syara/engine/`) to `examples/syara_components.py`. Their names are no longer registered in `syara/config.yaml` or `syara/config.py`. Use `get_example_config_manager()` in example scripts.
+
+### Backward Compatibility
+- ✅ All existing rules continue to work — new LLM `cleaner`/`chunker` parameters default to `no_op`/`no_chunking` (same as prior behaviour).
+- ✅ `wide` modifier was previously a no-op; rules using it will now actively match the wide form.
+- ⚠️ Rules referencing `html-text`, `sbert-finetuned-phishing`, `deberta-clickfix`, or `gemini` from the default config must now pass a `config_manager` from `get_example_config_manager()`.
+
 ## [0.2.3] - 2026-01-05
 
 ### Changed
@@ -112,6 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration system
 - Basic test suite
 
+[0.2.4]: https://github.com/nabeelxy/syara/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/nabeelxy/syara/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/nabeelxy/syara/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/nabeelxy/syara/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nabeelxy/syara/compare/v0.1.1...v0.2.0
