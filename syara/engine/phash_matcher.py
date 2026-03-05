@@ -159,11 +159,16 @@ class ImageHashMatcher(PHashMatcher):
 
 class AudioHashMatcher(PHashMatcher):
     """
-    Audio perceptual hash implementation.
+    Audio perceptual hash implementation for WAV files.
 
-    This is a placeholder implementation. For production use, consider libraries like:
-    - chromaprint/acoustid for audio fingerprinting
-    - dejavu for audio recognition
+    Uses a dHash-style algorithm on evenly-sampled audio frames:
+    reads 65 amplitude values at equal intervals across the file,
+    then encodes each consecutive pair comparison as a bit in a 64-bit hash.
+
+    Supports standard uncompressed PCM WAV files via the stdlib ``wave``
+    module.  For non-WAV formats or advanced fingerprinting, replace
+    ``compute_hash`` with an implementation backed by a dedicated library
+    (e.g. chromaprint/acoustid).
     """
 
     def __init__(self):
@@ -172,23 +177,57 @@ class AudioHashMatcher(PHashMatcher):
 
     def compute_hash(self, file_path: Union[str, Path]) -> int:
         """
-        Compute perceptual hash of an audio file.
-
-        This is a placeholder. Implement using audio fingerprinting libraries.
+        Compute a 64-bit dHash-style fingerprint of a WAV audio file.
 
         Args:
-            file_path: Path to audio file
+            file_path: Path to a PCM WAV audio file
 
         Returns:
-            Hash value
+            64-bit integer hash
 
         Raises:
-            NotImplementedError: This is a placeholder implementation
+            wave.Error: If the file is not a valid WAV file
+            FileNotFoundError: If the file does not exist
         """
-        raise NotImplementedError(
-            "AudioHashMatcher is a placeholder. For production use, install and use "
-            "a library like 'pyacoustid' or implement custom audio fingerprinting."
-        )
+        import wave
+        import struct
+
+        with wave.open(str(file_path), 'rb') as wav:
+            n_frames = wav.getnframes()
+            sampwidth = wav.getsampwidth()
+
+            if n_frames == 0:
+                return 0
+
+            # Sample 65 evenly-spaced frames to produce a 64-bit dHash
+            n_samples = 65
+            step = max(1, n_frames // n_samples)
+
+            samples = []
+            for i in range(n_samples):
+                pos = min(i * step, n_frames - 1)
+                wav.setpos(pos)
+                raw = wav.readframes(1)
+                if not raw:
+                    samples.append(0)
+                    continue
+                # Extract first channel, first sample as a signed integer
+                if sampwidth == 1:
+                    val = raw[0] - 128          # unsigned 8-bit → signed
+                elif sampwidth == 2:
+                    val = struct.unpack('<h', raw[:2])[0]
+                elif sampwidth == 4:
+                    val = struct.unpack('<i', raw[:4])[0]
+                else:
+                    val = raw[0]
+                samples.append(val)
+
+        # Build 64-bit hash: bit i is set when sample[i] > sample[i+1]
+        hash_value = 0
+        for i in range(64):
+            if samples[i] > samples[i + 1]:
+                hash_value |= (1 << i)
+        return hash_value
 
     def hamming_distance(self, hash1: int, hash2: int) -> int:
         """Calculate Hamming distance."""
@@ -198,12 +237,16 @@ class AudioHashMatcher(PHashMatcher):
 
 class VideoHashMatcher(PHashMatcher):
     """
-    Video perceptual hash implementation.
+    Video content fingerprint implementation.
 
-    This is a placeholder implementation. Video hashing typically involves:
-    - Extracting key frames
-    - Computing image hashes for each frame
-    - Aggregating frame hashes
+    Produces a 64-bit dHash-style fingerprint by sampling 65 raw bytes at
+    evenly-spaced offsets across the file and comparing consecutive values.
+    This gives a deterministic, reproducible fingerprint that is sensitive to
+    content differences without requiring external video-decoding libraries.
+
+    For true perceptual video hashing (frame extraction, visual similarity),
+    replace ``compute_hash`` with an implementation backed by a library such
+    as OpenCV (``opencv-python``).
     """
 
     def __init__(self):
@@ -212,23 +255,42 @@ class VideoHashMatcher(PHashMatcher):
 
     def compute_hash(self, file_path: Union[str, Path]) -> int:
         """
-        Compute perceptual hash of a video file.
+        Compute a 64-bit content fingerprint of a video file.
 
-        This is a placeholder. Implement using video processing libraries.
+        Reads 65 bytes at evenly-spaced positions across the file and
+        encodes each consecutive pair comparison as a bit.
 
         Args:
             file_path: Path to video file
 
         Returns:
-            Hash value
+            64-bit integer fingerprint
 
         Raises:
-            NotImplementedError: This is a placeholder implementation
+            FileNotFoundError: If the file does not exist
         """
-        raise NotImplementedError(
-            "VideoHashMatcher is a placeholder. For production use, implement using "
-            "libraries like 'opencv-python' to extract frames and hash them."
-        )
+        file_path = Path(file_path)
+        file_size = file_path.stat().st_size
+
+        if file_size == 0:
+            return 0
+
+        n_samples = 65
+        samples = []
+        with open(file_path, 'rb') as f:
+            for i in range(n_samples):
+                # Spread samples evenly across [0, file_size - 1]
+                pos = int(i * (file_size - 1) / (n_samples - 1)) if file_size > 1 else 0
+                f.seek(pos)
+                byte = f.read(1)
+                samples.append(byte[0] if byte else 0)
+
+        # Build 64-bit hash: bit i is set when sample[i] > sample[i+1]
+        hash_value = 0
+        for i in range(64):
+            if samples[i] > samples[i + 1]:
+                hash_value |= (1 << i)
+        return hash_value
 
     def hamming_distance(self, hash1: int, hash2: int) -> int:
         """Calculate Hamming distance."""
