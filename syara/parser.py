@@ -115,13 +115,92 @@ class SYaraParser:
         return content
 
     def _split_rules(self, content: str) -> List[str]:
-        """Split content into individual rule blocks."""
-        # Pattern to match: rule <name> [: tags] { ... }
-        pattern = r'rule\s+\w+(?:\s*:\s*[\w\s]+)?\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}'
+        """Split content into individual rule blocks using brace counting.
 
-        matches = re.finditer(pattern, content, re.DOTALL)
+        Handles regex patterns with {n,m} quantifiers inside rule bodies by
+        skipping over string literals and regex literals when counting braces.
+        """
+        blocks = []
+        i = 0
+        n = len(content)
 
-        blocks = [match.group(0) for match in matches]
+        # Match: rule <name> [: tags] {
+        header_re = re.compile(r'\brule\s+\w+(?:\s*:\s*[\w\s]+?)?\s*\{', re.DOTALL)
+
+        while i < n:
+            m = header_re.search(content, i)
+            if not m:
+                break
+
+            rule_start = m.start()
+            j = m.end()   # position immediately after the opening '{'
+            depth = 1     # we already consumed one '{'
+
+            while j < n and depth > 0:
+                c = content[j]
+
+                if c == '\\':
+                    # Escape sequence — skip next character
+                    j += 2
+
+                elif c == '"':
+                    # String literal — triple-quoted or single-quoted
+                    if content[j:j + 3] == '"""':
+                        j += 3
+                        while j < n:
+                            if content[j] == '\\':
+                                j += 2
+                                continue
+                            if content[j:j + 3] == '"""':
+                                j += 3
+                                break
+                            j += 1
+                    else:
+                        j += 1
+                        while j < n:
+                            if content[j] == '\\':
+                                j += 2
+                                continue
+                            if content[j] == '"':
+                                j += 1
+                                break
+                            j += 1
+
+                elif c == '/':
+                    # Regex literal when immediately preceded by '=' (with optional whitespace)
+                    k = j - 1
+                    while k >= rule_start and content[k] in ' \t':
+                        k -= 1
+                    if k >= rule_start and content[k] == '=':
+                        # Skip regex body to closing '/'
+                        j += 1
+                        while j < n:
+                            if content[j] == '\\':
+                                j += 2
+                                continue
+                            if content[j] == '/':
+                                j += 1
+                                break
+                            j += 1
+                        # Skip optional flags (e.g., 'i', 's')
+                        while j < n and content[j].isalpha():
+                            j += 1
+                    else:
+                        j += 1
+
+                elif c == '{':
+                    depth += 1
+                    j += 1
+
+                elif c == '}':
+                    depth -= 1
+                    j += 1
+
+                else:
+                    j += 1
+
+            blocks.append(content[rule_start:j])
+            i = j
 
         return blocks
 
@@ -410,11 +489,15 @@ class SYaraParser:
             # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
             llm_name = parsed_params.get('llm', 'flan-t5-large')
+            cleaner_name = parsed_params.get('cleaner', 'no_op')
+            chunker_name = parsed_params.get('chunker', 'no_chunking')
 
             llm_rules.append(LLMRule(
                 identifier=identifier,
                 pattern=pattern,
-                llm_name=llm_name
+                llm_name=llm_name,
+                cleaner_name=cleaner_name,
+                chunker_name=chunker_name,
             ))
 
         # Match single-quoted patterns
@@ -431,11 +514,15 @@ class SYaraParser:
             # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
             llm_name = parsed_params.get('llm', 'flan-t5-large')
+            cleaner_name = parsed_params.get('cleaner', 'no_op')
+            chunker_name = parsed_params.get('chunker', 'no_chunking')
 
             llm_rules.append(LLMRule(
                 identifier=identifier,
                 pattern=pattern,
-                llm_name=llm_name
+                llm_name=llm_name,
+                cleaner_name=cleaner_name,
+                chunker_name=chunker_name,
             ))
 
         return llm_rules
