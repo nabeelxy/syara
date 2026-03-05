@@ -134,23 +134,51 @@ class TunedSBERTClassifier(SemanticClassifier):
 
     def train(self, examples: List[Tuple[str, str, bool]]) -> None:
         """
-        Placeholder for training/fine-tuning.
+        Calibrate threshold_boost from labeled examples.
 
-        In a real implementation, this would:
-        1. Create a classification dataset from examples
-        2. Fine-tune the SBERT model with a classification head
-        3. Save the tuned weights
+        Computes cosine similarity between (rule_text, input_text) for every
+        example, then finds the similarity cutpoint that maximises accuracy.
+        Sets threshold_boost so that the optimal cutpoint maps to 0.5
+        (the reference decision threshold), so a rule using threshold=0.5
+        performs optimally on these examples.
 
         Args:
             examples: List of (rule_text, input_text, is_match) tuples
         """
-        # This is a placeholder - actual implementation would require:
-        # - PyTorch training loop
-        # - Classification loss (e.g., binary cross-entropy)
-        # - Validation split
-        # - Model checkpoint saving
-        print(f"Training placeholder: {len(examples)} examples provided")
-        print("Note: Actual training requires additional implementation")
+        if not examples:
+            return
+
+        # Compute similarity scores
+        scored: List[Tuple[float, bool]] = []
+        for rule_text, input_text, is_match in examples:
+            if not rule_text or not input_text:
+                continue
+            emb1 = self.model.encode(rule_text, convert_to_numpy=True)
+            emb2 = self.model.encode(input_text, convert_to_numpy=True)
+            sim = float(self._cosine_similarity(emb1, emb2))
+            scored.append((sim, is_match))
+
+        if not scored:
+            return
+
+        n = len(scored)
+
+        # Scan every unique similarity value as candidate threshold.
+        # Pick the threshold T* that maximises accuracy when predicting
+        # "positive if sim >= T*".
+        best_accuracy = -1.0
+        best_threshold = 0.5
+
+        for candidate in sorted(set(s for s, _ in scored)):
+            correct = sum(1 for sim, match in scored if (sim >= candidate) == match)
+            if correct / n > best_accuracy:
+                best_accuracy = correct / n
+                best_threshold = candidate
+
+        # Shift scores so that the optimal cutpoint aligns with 0.5:
+        # sim + threshold_boost >= 0.5  ↔  sim >= best_threshold
+        # ⟹  threshold_boost = 0.5 - best_threshold
+        self.threshold_boost = 0.5 - best_threshold
 
 
 class DistilBERTClassifier(SemanticClassifier):
