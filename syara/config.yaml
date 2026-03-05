@@ -37,6 +37,7 @@ phash_matchers:
 # Classifiers - fine-tuned models for binary classification
 classifiers:
   tuned-sbert: syara.engine.classifier.TunedSBERTClassifier
+  distilbert: syara.engine.classifier.DistilBERTClassifier
 
 # LLM evaluators - language models for semantic evaluation
 llms:
