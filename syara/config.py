@@ -109,6 +109,7 @@ class ConfigManager:
             },
             classifiers={
                 'tuned-sbert': 'syara.engine.classifier.TunedSBERTClassifier',
+                'distilbert': 'syara.engine.classifier.DistilBERTClassifier',
             },
             llms={
                 'flan-t5-large': 'syara.engine.llm_evaluator.OSSLLMEvaluator',
@@ -143,11 +144,16 @@ class ConfigManager:
         if name in self._cleaner_cache:
             return self._cleaner_cache[name]
 
-        class_path = self.config.cleaners.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.cleaners.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown cleaner: {name}")
 
-        instance = self._instantiate_class(class_path)
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            instance = class_path_or_instance
+
         self._cleaner_cache[name] = instance
         return instance
 
@@ -158,19 +164,26 @@ class ConfigManager:
 
         # For chunkers with parameters, don't cache
         if kwargs:
-            class_path = self.config.chunkers.get(name)
-            if class_path is None:
+            class_path_or_instance = self.config.chunkers.get(name)
+            if class_path_or_instance is None:
                 raise ValueError(f"Unknown chunker: {name}")
-            return self._instantiate_class(class_path, **kwargs)
+            if isinstance(class_path_or_instance, str):
+                return self._instantiate_class(class_path_or_instance, **kwargs)
+            return class_path_or_instance
 
         if name in self._chunker_cache:
             return self._chunker_cache[name]
 
-        class_path = self.config.chunkers.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.chunkers.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown chunker: {name}")
 
-        instance = self._instantiate_class(class_path)
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            instance = class_path_or_instance
+
         self._chunker_cache[name] = instance
         return instance
 
@@ -203,11 +216,16 @@ class ConfigManager:
         if name in self._phash_cache:
             return self._phash_cache[name]
 
-        class_path = self.config.phash_matchers.get(name)
-        if class_path is None:
+        class_path_or_instance = self.config.phash_matchers.get(name)
+        if class_path_or_instance is None:
             raise ValueError(f"Unknown phash matcher: {name}")
 
-        instance = self._instantiate_class(class_path)
+        # Support both class paths (strings) and pre-instantiated objects
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            instance = class_path_or_instance
+
         self._phash_cache[name] = instance
         return instance
 
