@@ -51,6 +51,8 @@ class LLMRule:
     identifier: str  # e.g., "$s5"
     pattern: str
     llm_name: str = "flan-t5-large"
+    cleaner_name: str = "no_op"
+    chunker_name: str = "no_chunking"
 
 
 @dataclass
