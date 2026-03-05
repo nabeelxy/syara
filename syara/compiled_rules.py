@@ -3,6 +3,7 @@ Execution engine for compiled rules.
 """
 from typing import List, Dict
 import re
+import warnings
 from syara.models import Rule, Match, MatchDetail
 from syara.config import ConfigManager
 from syara.cache import TextCache
@@ -93,9 +94,21 @@ class CompiledRules:
         Returns:
             Match object with results
         """
-        # Dictionary to track all pattern matches
-        # Key: identifier (e.g., "$s1"), Value: List[MatchDetail]
+        # Initialise every identifier with an empty list so that condition
+        # constructs like "all of them" and "all of ($prefix*)" can correctly
+        # evaluate identifiers that produced no matches (rather than silently
+        # ignoring them and treating a partial match as "all").
         pattern_matches: Dict[str, List[MatchDetail]] = {}
+        for string_rule in rule.strings:
+            pattern_matches[string_rule.identifier] = []
+        for sim_rule in rule.similarity:
+            pattern_matches[sim_rule.identifier] = []
+        for phash_rule in rule.phash:
+            pattern_matches[phash_rule.identifier] = []
+        for cls_rule in rule.classifier:
+            pattern_matches[cls_rule.identifier] = []
+        for llm_rule in rule.llm:
+            pattern_matches[llm_rule.identifier] = []
 
         # Execute pattern matching in cost-optimized order
 
@@ -205,12 +218,16 @@ class CompiledRules:
 
     def _execute_llm(self, rule, text: str, cache: TextCache) -> List[MatchDetail]:
         """Execute LLM evaluation."""
-        # Get LLM evaluator
+        # Get components
+        cleaner = self.config_manager.get_cleaner(rule.cleaner_name)
+        chunker = self.config_manager.get_chunker(rule.chunker_name)
         llm = self.config_manager.get_llm(rule.llm_name)
 
-        # For LLM, we typically don't chunk - evaluate the whole text
-        # But we could add a chunker if needed
-        matches = llm.evaluate_chunks(rule, [text])
+        # Clean text (with caching) then chunk
+        cleaned_text = cache.get_cleaned_text(text, cleaner, rule.cleaner_name)
+        chunks = chunker.chunk(cleaned_text)
+
+        matches = llm.evaluate_chunks(rule, chunks)
 
         return matches
 
@@ -277,8 +294,12 @@ class CompiledRules:
             return bool(result)
 
         except Exception as e:
-            # If evaluation fails, log and return False
-            print(f"Warning: Failed to evaluate condition '{condition}': {e}")
+            # If evaluation fails, warn and return False
+            warnings.warn(
+                f"Failed to evaluate condition '{condition}': {e}",
+                UserWarning,
+                stacklevel=2,
+            )
             return False
 
     def _translate_yara_condition(
