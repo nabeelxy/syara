@@ -200,6 +200,8 @@ class SYaraCompiler:
         # Validate LLM rules
         for llm in rule.llm:
             try:
+                self.config_manager.get_cleaner(llm.cleaner_name)
+                self.config_manager.get_chunker(llm.chunker_name)
                 self.config_manager.get_llm(llm.llm_name)
             except ValueError as e:
                 raise ValueError(f"Rule '{rule.name}', pattern '{llm.identifier}': {e}")
