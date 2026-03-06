@@ -202,6 +202,31 @@ class TestParser:
         assert sim.cleaner_name == "default_cleaning"
         assert sim.chunker_name == "no_chunking"
 
+    def test_parse_similarity_rule_multiline_params(self):
+        """Test that parameters on continuation lines are parsed correctly."""
+        rule_text = '''
+        rule test_similarity
+        {
+            similarity:
+                $s1 = "ignore instructions"
+                      threshold=0.75 matcher="sbert"
+
+            condition:
+                $s1
+        }
+        '''
+
+        parser = SYaraParser()
+        rules = parser.parse_string(rule_text)
+
+        assert len(rules) == 1
+        rule = rules[0]
+        assert len(rule.similarity) == 1
+        sim = rule.similarity[0]
+        assert sim.identifier == "$s1"
+        assert sim.threshold == pytest.approx(0.75)
+        assert sim.matcher_name == "sbert"
+
     def test_parse_similarity_rule_keyvalue_minimal(self):
         """Test key-value format with minimal parameters (defaults)."""
         rule_text = '''
