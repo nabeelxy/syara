@@ -28,6 +28,7 @@ from syara.models import (
     SimilarityRule,
     ClassifierRule,
     LLMRule,
+    FieldRule,
 )
 from syara.config import ConfigManager, Config
 
@@ -48,6 +49,7 @@ __all__ = [
     'SimilarityRule',
     'ClassifierRule',
     'LLMRule',
+    'FieldRule',
     # Config
     'ConfigManager',
     'Config',

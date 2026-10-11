@@ -56,6 +56,16 @@ class LLMRule:
 
 
 @dataclass
+class FieldRule:
+    """Represents a key:value field matching rule (Sigma-style)."""
+    identifier: str  # e.g., "$evt"
+    field_name: str  # e.g., "EventID"
+    pattern: str     # e.g., "4624" or "cmd.exe" or r"192\.168\.\d+\.\d+"
+    modifiers: List[str] = field(default_factory=list)  # nocase, etc.
+    is_regex: bool = False
+
+
+@dataclass
 class MatchDetail:
     """Details of a single pattern match."""
     identifier: str
@@ -77,6 +87,7 @@ class Rule:
     phash: List[PHashRule] = field(default_factory=list)
     classifier: List[ClassifierRule] = field(default_factory=list)
     llm: List[LLMRule] = field(default_factory=list)
+    fields: List[FieldRule] = field(default_factory=list)
     condition: str = ""
 
 

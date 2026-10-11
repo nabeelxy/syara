@@ -12,6 +12,7 @@ from syara.engine.chunker import (
     TextChunker
 )
 from syara.engine.string_matcher import StringMatcher
+from syara.engine.field_matcher import FieldMatcher
 from syara.engine.semantic_matcher import SemanticMatcher, SBERTMatcher
 from syara.engine.classifier import SemanticClassifier, TunedSBERTClassifier, CalibratedSBERTClassifier, DistilBERTClassifier
 from syara.engine.llm_evaluator import LLMEvaluator, OpenAIEvaluator, OSSLLMEvaluator
@@ -32,6 +33,7 @@ __all__ = [
     'TextChunker',
     # Matchers
     'StringMatcher',
+    'FieldMatcher',
     'SemanticMatcher',
     'SBERTMatcher',
     # Classifiers

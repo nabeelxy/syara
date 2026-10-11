@@ -109,7 +109,8 @@ class SYaraCompiler:
             len(rule.similarity) +
             len(rule.phash) +
             len(rule.classifier) +
-            len(rule.llm)
+            len(rule.llm) +
+            len(rule.fields)
         )
 
         if total_patterns == 0:
@@ -140,6 +141,8 @@ class SYaraCompiler:
             identifiers.add(s.identifier)
         for s in rule.llm:
             identifiers.add(s.identifier)
+        for f in rule.fields:
+            identifiers.add(f.identifier)
 
         # Extract identifiers from condition (simple approach)
         # This matches $identifier patterns

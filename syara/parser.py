@@ -10,7 +10,8 @@ from syara.models import (
     SimilarityRule,
     PHashRule,
     ClassifierRule,
-    LLMRule
+    LLMRule,
+    FieldRule
 )
 
 
@@ -19,7 +20,7 @@ class SYaraParser:
 
     # Section header regex: keyword followed by colon, not inside strings/identifiers
     _SECTION_RE = re.compile(
-        r'(?<!["\$\w])(meta|strings|similarity|phash|classifier|llm|condition)[ \t]*:',
+        r'(?<!["\$\w])(meta|strings|similarity|phash|classifier|llm|fields|condition)[ \t]*:',
         re.IGNORECASE
     )
 
@@ -255,6 +256,7 @@ class SYaraParser:
         phash = self._parse_phash_content(sections.get('phash', ''))
         classifier = self._parse_classifier_content(sections.get('classifier', ''))
         llm = self._parse_llm_content(sections.get('llm', ''))
+        fields = self._parse_fields_content(sections.get('fields', ''))
         condition = sections.get('condition', '').strip()
 
         return Rule(
@@ -266,6 +268,7 @@ class SYaraParser:
             phash=phash,
             classifier=classifier,
             llm=llm,
+            fields=fields,
             condition=condition
         )
 
@@ -441,6 +444,49 @@ class SYaraParser:
             ))
 
         return llm_rules
+
+    def _parse_fields_content(self, content: str) -> List[FieldRule]:
+        """Parse fields section content."""
+        field_rules = []
+        for line in content.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+
+            # Literal: $id = field_name = "value" [modifiers]
+            match = re.match(r'(\$\w+)\s*=\s*([\w.]+)\s*=\s*"([^"]*)"\s*(.*)', line)
+            if match:
+                identifier, field_name, pattern, modifiers_str = match.groups()
+                modifiers = [m.strip() for m in modifiers_str.split() if m.strip()]
+                field_rules.append(FieldRule(
+                    identifier=identifier,
+                    field_name=field_name,
+                    pattern=pattern,
+                    modifiers=modifiers,
+                    is_regex=False
+                ))
+                continue
+
+            # Regex: $id = field_name = /pattern/[flags]
+            match = re.match(r'(\$\w+)\s*=\s*([\w.]+)\s*=\s*/((?:[^/\\]|\\.)+)/([is]*)\s*(.*)', line)
+            if match:
+                identifier, field_name, pattern, inline_flags, modifiers_str = match.groups()
+                pattern = pattern.replace('\\/', '/')
+                modifiers = list(inline_flags) + [tok for tok in modifiers_str.split() if tok.strip()]
+                field_rules.append(FieldRule(
+                    identifier=identifier,
+                    field_name=field_name,
+                    pattern=pattern,
+                    modifiers=modifiers,
+                    is_regex=True
+                ))
+
+        return field_rules
+
+    def _parse_fields_section(self, body: str) -> List[FieldRule]:
+        """Parse fields section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_fields_content(sections.get('fields', ''))
 
     def _parse_meta_section(self, body: str) -> Dict[str, str]:
         """Parse meta section (backward compat wrapper)."""

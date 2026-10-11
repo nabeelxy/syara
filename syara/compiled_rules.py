@@ -8,6 +8,7 @@ from syara.models import Rule, Match, MatchDetail
 from syara.config import ConfigManager
 from syara.cache import TextCache
 from syara.engine.string_matcher import StringMatcher
+from syara.engine.field_matcher import FieldMatcher
 
 
 class _BoolEval:
@@ -103,14 +104,16 @@ class CompiledRules:
         self.rules = rules
         self.config_manager = config_manager
         self.string_matcher = StringMatcher()
+        self.field_matcher = FieldMatcher()
 
-    def match(self, text: str) -> List[Match]:
+    def match(self, text: str, fields: Dict[str, str] = None) -> List[Match]:
         """
         Match text against all text-based rules (strings, similarity, classifier, llm).
         Note: This will NOT match phash rules which require binary file input.
 
         Args:
             text: Input text to match
+            fields: Optional dict of field name → value for Sigma-style field matching
 
         Returns:
             List of Match objects for all rules
@@ -122,7 +125,7 @@ class CompiledRules:
             # Execute each rule
             matches = []
             for rule in self.rules:
-                match = self._execute_rule(rule, text, cache, file_path=None)
+                match = self._execute_rule(rule, text, cache, file_path=None, fields=fields)
                 matches.append(match)
 
             return matches
@@ -131,12 +134,13 @@ class CompiledRules:
             # Always clear cache after matching session
             cache.clear()
 
-    def match_file(self, file_path: str) -> List[Match]:
+    def match_file(self, file_path: str, fields: Dict[str, str] = None) -> List[Match]:
         """
         Match binary file against phash rules.
 
         Args:
             file_path: Path to binary file (image, audio, video)
+            fields: Optional dict of field name → value for Sigma-style field matching
 
         Returns:
             List of Match objects for rules containing phash patterns
@@ -149,7 +153,7 @@ class CompiledRules:
             matches = []
             for rule in self.rules:
                 if rule.phash:  # Only execute rules with phash patterns
-                    match = self._execute_rule(rule, "", cache, file_path=file_path)
+                    match = self._execute_rule(rule, "", cache, file_path=file_path, fields=fields)
                     matches.append(match)
 
             return matches
@@ -157,7 +161,7 @@ class CompiledRules:
         finally:
             cache.clear()
 
-    def _execute_rule(self, rule: Rule, text: str, cache: TextCache, file_path: str = None) -> Match:
+    def _execute_rule(self, rule: Rule, text: str, cache: TextCache, file_path: str = None, fields: Dict[str, str] = None) -> Match:
         """
         Execute a single rule against text or file.
 
@@ -166,6 +170,7 @@ class CompiledRules:
             text: Input text (for text-based rules)
             cache: Text cache for this session
             file_path: Optional file path (for phash rules)
+            fields: Optional dict of field name → value for field matching
 
         Returns:
             Match object with results
@@ -185,6 +190,8 @@ class CompiledRules:
             pattern_matches[cls_rule.identifier] = []
         for llm_rule in rule.llm:
             pattern_matches[llm_rule.identifier] = []
+        for field_rule in rule.fields:
+            pattern_matches[field_rule.identifier] = []
 
         # Execute pattern matching in cost-optimized order
 
@@ -193,6 +200,15 @@ class CompiledRules:
             matches = self.string_matcher.match(string_rule, text)
             if matches:
                 pattern_matches[string_rule.identifier] = matches
+
+        # 1.5. Field patterns (like string matching but against specific field values)
+        if fields:
+            for field_rule in rule.fields:
+                field_value = fields.get(field_rule.field_name, '')
+                if field_value:
+                    matches = self.field_matcher.match(field_rule, field_value)
+                    if matches:
+                        pattern_matches[field_rule.identifier] = matches
 
         # 2. Similarity patterns (moderate cost)
         for sim_rule in rule.similarity:
@@ -500,29 +516,31 @@ class CompiledRules:
 
         return eval_expr
 
-    def match_any(self, text: str) -> List[Match]:
+    def match_any(self, text: str, fields: Dict[str, str] = None) -> List[Match]:
         """
         Match text and return only rules that matched.
 
         Args:
             text: Input text to match
+            fields: Optional dict of field name → value for field matching
 
         Returns:
             List of Match objects where matched=True
         """
-        return [m for m in self.match(text) if m.matched]
+        return [m for m in self.match(text, fields=fields) if m.matched]
 
-    def matched(self, text: str) -> bool:
+    def matched(self, text: str, fields: Dict[str, str] = None) -> bool:
         """
         Check if any rule matches the text.
 
         Args:
             text: Input text to match
+            fields: Optional dict of field name → value for field matching
 
         Returns:
             True if any rule matched, False otherwise
         """
-        return any(m.matched for m in self.match(text))
+        return any(m.matched for m in self.match(text, fields=fields))
 
     def __repr__(self) -> str:
         """String representation of compiled rules."""
