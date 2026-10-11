@@ -53,9 +53,8 @@ class OpenAIEvaluator(LLMEvaluator):
     def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str]:
         """Evaluate using OpenAI LLM."""
         if not rule_text or not input_text:
-            return False, "Empty input"
+            return False, "Empty input", 0.0
 
-        # Construct prompt for LLM evaluation
         prompt = self._build_prompt(rule_text, input_text)
 
         try:
@@ -72,18 +71,28 @@ class OpenAIEvaluator(LLMEvaluator):
                     }
                 ],
                 temperature=0.0,
-                max_tokens=100
+                max_tokens=10,
+                logprobs=True,
+                top_logprobs=2
             )
 
             result = response.choices[0].message.content.strip()
-
-            # Parse response
             is_match, explanation = self._parse_response(result)
 
-            return is_match, explanation
+            # Extract confidence from logprobs if available
+            confidence = 0.5
+            try:
+                logprob_content = response.choices[0].logprobs.content
+                if logprob_content:
+                    top_logprob = logprob_content[0].logprob
+                    confidence = math.exp(top_logprob)
+            except Exception:
+                pass
+
+            return is_match, explanation, confidence
 
         except Exception as e:
-            return False, f"LLM evaluation error: {str(e)}"
+            return False, f"LLM evaluation error: {str(e)}", 0.0
 
     def _build_prompt(self, rule_text: str, input_text: str) -> str:
         """Build evaluation prompt for LLM."""
@@ -115,18 +124,16 @@ Does the input text semantically match the pattern's intent? Respond with:
     ) -> List[MatchDetail]:
         """
         Evaluate multiple chunks using LLM.
-
-        Args:
-            rule: LLMRule to apply
-            chunks: List of text chunks
-
-        Returns:
-            List of MatchDetail for matched chunks
         """
         matches = []
 
         for chunk in chunks:
-            is_match, explanation = self.evaluate(rule.pattern, chunk)
+            result = self.evaluate(rule.pattern, chunk)
+            if len(result) == 3:
+                is_match, explanation, confidence = result
+            else:
+                is_match, explanation = result
+                confidence = 1.0
 
             if is_match:
                 detail = MatchDetail(
@@ -134,7 +141,7 @@ Does the input text semantically match the pattern's intent? Respond with:
                     matched_text=chunk,
                     start_pos=-1,
                     end_pos=-1,
-                    score=1.0,  # LLM matches are binary
+                    score=confidence,
                     explanation=explanation
                 )
                 matches.append(detail)
@@ -182,15 +189,13 @@ class OSSLLMEvaluator(LLMEvaluator):
     def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str]:
         """Evaluate using OSS LLM."""
         if not rule_text or not input_text:
-            return False, "Empty input"
+            return False, "Empty input", 0.0
 
         prompt = self._build_prompt(rule_text, input_text)
 
         if self.endpoint:
-            # Use remote endpoint
             return self._evaluate_remote(prompt)
         else:
-            # Use local model
             return self._evaluate_local(prompt)
 
     def _build_prompt(self, rule_text: str, input_text: str) -> str:
@@ -200,6 +205,30 @@ class OSSLLMEvaluator(LLMEvaluator):
 Text: {input_text}
 
 Answer YES or NO with a brief explanation:"""
+
+    def _extract_confidence(self, prompt: str, is_yes: bool) -> float:
+        """Extract confidence score using output token probabilities."""
+        try:
+            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            with self.torch.no_grad():
+                outputs = self.model(**inputs)
+            logits = outputs.logits if hasattr(outputs, 'logits') else None
+            if logits is None:
+                return 1.0
+            yes_id = self.tokenizer.encode("YES", add_special_tokens=False)
+            no_id = self.tokenizer.encode("NO", add_special_tokens=False)
+            if not yes_id or not no_id:
+                return 1.0
+            import torch
+            probs = torch.softmax(logits[0, -1, :], dim=-1)
+            yes_prob = float(probs[yes_id[0]])
+            no_prob = float(probs[no_id[0]])
+            total = yes_prob + no_prob
+            if total == 0:
+                return 1.0
+            return yes_prob / total if is_yes else no_prob / total
+        except Exception:
+            return 1.0
 
     def _evaluate_local(self, prompt: str) -> Tuple[bool, str]:
         """Evaluate using locally loaded model."""
@@ -215,11 +244,12 @@ Answer YES or NO with a brief explanation:"""
                 )
 
             response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-            return self._parse_response(response)
+            is_match, explanation = self._parse_response(response)
+            confidence = self._extract_confidence(prompt, is_match)
+            return is_match, explanation, confidence
 
         except Exception as e:
-            return False, f"Local LLM error: {str(e)}"
+            return False, f"Local LLM error: {str(e)}", 0.0
 
     def _evaluate_remote(self, prompt: str) -> Tuple[bool, str]:
         """Evaluate using remote endpoint."""
@@ -261,7 +291,12 @@ Answer YES or NO with a brief explanation:"""
         matches = []
 
         for chunk in chunks:
-            is_match, explanation = self.evaluate(rule.pattern, chunk)
+            result = self.evaluate(rule.pattern, chunk)
+            if len(result) == 3:
+                is_match, explanation, confidence = result
+            else:
+                is_match, explanation = result
+                confidence = 1.0
 
             if is_match:
                 detail = MatchDetail(
@@ -269,7 +304,7 @@ Answer YES or NO with a brief explanation:"""
                     matched_text=chunk,
                     start_pos=-1,
                     end_pos=-1,
-                    score=1.0,
+                    score=confidence,
                     explanation=explanation
                 )
                 matches.append(detail)
