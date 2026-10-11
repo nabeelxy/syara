@@ -209,6 +209,9 @@ class CompiledRules:
 
         # 4. Classifier patterns (higher cost)
         for cls_rule in rule.classifier:
+            # Skip if classifier result cannot change the condition outcome
+            if not self._is_identifier_needed(cls_rule.identifier, rule.condition, pattern_matches):
+                continue
             matches = self._execute_classifier(cls_rule, text, cache)
             if matches:
                 pattern_matches[cls_rule.identifier] = matches
