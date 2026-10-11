@@ -208,6 +208,34 @@ class SYaraCompiler:
 
 
 # Convenience function for direct compilation
+def compile_string(rule_content: str, config_path: Optional[str] = None, config_manager: Optional[ConfigManager] = None) -> CompiledRules:
+    """
+    Compile rules from a string.
+
+    Args:
+        rule_content: Rule content as string
+        config_path: Optional path to configuration file
+        config_manager: Optional pre-configured ConfigManager instance
+
+    Returns:
+        CompiledRules object
+
+    Example:
+        >>> import syara
+        >>> rules = syara.compile_string('''
+        ... rule TestRule {
+        ...     strings:
+        ...         $s1 = "hello"
+        ...     condition:
+        ...         $s1
+        ... }
+        ... ''')
+        >>> matches = rules.match("hello world")
+    """
+    compiler = SYaraCompiler(config_path, config_manager)
+    return compiler.compile_string(rule_content)
+
+
 def compile(filepath: str, config_path: Optional[str] = None, config_manager: Optional[ConfigManager] = None) -> CompiledRules:
     """
     Compile a .syara rule file.

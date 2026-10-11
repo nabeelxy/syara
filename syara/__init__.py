@@ -18,7 +18,7 @@ __version__ = "0.2.4"
 __author__ = "nabeelxy"
 
 # Import main API
-from syara.compiler import compile, SYaraCompiler
+from syara.compiler import compile, compile_string, SYaraCompiler
 from syara.compiled_rules import CompiledRules
 from syara.models import (
     Rule,
@@ -37,6 +37,7 @@ from syara import engine
 __all__ = [
     # Main API
     'compile',
+    'compile_string',
     'SYaraCompiler',
     'CompiledRules',
     # Models
