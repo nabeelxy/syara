@@ -1,0 +1,50 @@
+syara/compiler.py
+  s_cc8756834edad4::t_a68e4fa8af2eb5 113-114
+  s_cc8756834edad4::t_3db266a4824d38 215-223
+  s_cc8756834edad4::t_2d2adbf20527a9 147-148
+syara/engine/decision_evaluator.py
+  s_cc8756834edad4::t_d5aa5a1e6942cb 1-154
+syara/models.py
+  s_cc8756834edad4::t_9b7035724efd41 69-96
+  s_cc8756834edad4::t_c99be638b1c5f0 120
+  s_cc8756834edad4::t_df7eaaa647af27 68
+syara/compiled_rules.py
+  s_cc8756834edad4::t_1873ad60b0d349 196-197
+  s_cc8756834edad4::t_b1417a34d7d8d4 239-243,245
+  s_cc8756834edad4::t_4e1186e80ee95e 329-361
+  s_cc8756834edad4::t_23614b8588e051 7,12
+  s_cc8756834edad4::t_cb6dd79e826147 238,244,246-250
+  s_cc8756834edad4::t_634f55b26cbac2 362-482
+syara/__init__.py
+  s_cc8756834edad4::t_d3eececb89cc9d 54
+  s_cc8756834edad4::t_d64083162eec3d 32
+tests/test_decision.py
+  s_cc8756834edad4::t_94f97d8b2d5a30 1-806
+syara/config.py
+  s_cc8756834edad4::t_526707bbd05d86 27
+  s_cc8756834edad4::t_f4b8cc5988b55a 49
+  s_cc8756834edad4::t_9cbe1546fe35c3 328-365
+syara/parser.py
+  s_cc8756834edad4::t_08ad58f0d7683f 24
+  s_cc8756834edad4::t_8635117ab62c2a 14-15
+  s_cc8756834edad4::t_fa2faff41e3352 261,274
+  s_cc8756834edad4::t_96523a3e6e521e 489-557
+syara/engine/__init__.py
+  s_cc8756834edad4::t_10a1845657b65b 19,49-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "48e69a998d248a8bd64eec316c9d91269568d75a",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
