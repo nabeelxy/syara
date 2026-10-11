@@ -500,6 +500,30 @@ class CompiledRules:
 
         return eval_expr
 
+    def match_any(self, text: str) -> List[Match]:
+        """
+        Match text and return only rules that matched.
+
+        Args:
+            text: Input text to match
+
+        Returns:
+            List of Match objects where matched=True
+        """
+        return [m for m in self.match(text) if m.matched]
+
+    def matched(self, text: str) -> bool:
+        """
+        Check if any rule matches the text.
+
+        Args:
+            text: Input text to match
+
+        Returns:
+            True if any rule matched, False otherwise
+        """
+        return any(m.matched for m in self.match(text))
+
     def __repr__(self) -> str:
         """String representation of compiled rules."""
         return f"CompiledRules(rules={len(self.rules)})"
