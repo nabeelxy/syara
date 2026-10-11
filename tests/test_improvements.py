@@ -10,17 +10,25 @@ from unittest.mock import MagicMock, patch
 # Improvement 1 & 2: SBERTMatcher embedding cache
 # ─────────────────────────────────────────────
 
+def _make_sbert_matcher(mock_model):
+    """Helper: create an SBERTMatcher with a mocked underlying model."""
+    from syara.engine.semantic_matcher import SBERTMatcher
+    matcher = SBERTMatcher.__new__(SBERTMatcher)
+    matcher.model_name = 'all-MiniLM-L6-v2'
+    matcher.model = mock_model
+    matcher._embedding_cache = {}
+    return matcher
+
+
 def test_sbert_matcher_has_embedding_cache():
     """SBERTMatcher.__init__ should create an _embedding_cache dict."""
-    from syara.engine.semantic_matcher import SBERTMatcher
     import numpy as np
 
     mock_model = MagicMock()
     mock_model.get_sentence_embedding_dimension.return_value = 4
     mock_model.encode.return_value = np.array([0.1, 0.2, 0.3, 0.4])
 
-    with patch('syara.engine.semantic_matcher.SentenceTransformer', return_value=mock_model):
-        matcher = SBERTMatcher()
+    matcher = _make_sbert_matcher(mock_model)
 
     assert hasattr(matcher, '_embedding_cache')
     assert isinstance(matcher._embedding_cache, dict)
@@ -28,15 +36,13 @@ def test_sbert_matcher_has_embedding_cache():
 
 def test_sbert_embed_caches_result():
     """embed() should cache results and not call model.encode twice for same text."""
-    from syara.engine.semantic_matcher import SBERTMatcher
     import numpy as np
 
     mock_model = MagicMock()
     mock_model.get_sentence_embedding_dimension.return_value = 4
     mock_model.encode.return_value = np.array([0.1, 0.2, 0.3, 0.4])
 
-    with patch('syara.engine.semantic_matcher.SentenceTransformer', return_value=mock_model):
-        matcher = SBERTMatcher()
+    matcher = _make_sbert_matcher(mock_model)
 
     matcher.embed("hello world")
     matcher.embed("hello world")  # second call — should hit cache
@@ -46,14 +52,12 @@ def test_sbert_embed_caches_result():
 
 def test_sbert_embed_empty_returns_zero_vector():
     """embed('') should return a zero vector."""
-    from syara.engine.semantic_matcher import SBERTMatcher
     import numpy as np
 
     mock_model = MagicMock()
     mock_model.get_sentence_embedding_dimension.return_value = 4
 
-    with patch('syara.engine.semantic_matcher.SentenceTransformer', return_value=mock_model):
-        matcher = SBERTMatcher()
+    matcher = _make_sbert_matcher(mock_model)
 
     result = matcher.embed("")
     assert np.all(result == 0)
@@ -62,7 +66,6 @@ def test_sbert_embed_empty_returns_zero_vector():
 
 def test_get_similarity_batch_uses_cache():
     """get_similarity_batch() should only encode uncached texts."""
-    from syara.engine.semantic_matcher import SBERTMatcher
     import numpy as np
 
     vecs = {
@@ -78,8 +81,7 @@ def test_get_similarity_batch_uses_cache():
         else np.array([vecs[t] for t in texts])
     )
 
-    with patch('syara.engine.semantic_matcher.SentenceTransformer', return_value=mock_model):
-        matcher = SBERTMatcher()
+    matcher = _make_sbert_matcher(mock_model)
 
     # Pre-populate cache for "a"
     matcher._embedding_cache["a"] = vecs["a"]
@@ -104,9 +106,18 @@ def test_get_similarity_batch_uses_cache():
 # Improvement 3: classify() return contract
 # ─────────────────────────────────────────────
 
+def _make_tuned_sbert_clf(mock_model, threshold_boost=0.0):
+    """Helper: create a TunedSBERTClassifier with a mocked model."""
+    from syara.engine.classifier import TunedSBERTClassifier
+    clf = TunedSBERTClassifier.__new__(TunedSBERTClassifier)
+    clf.model_name = 'all-MiniLM-L6-v2'
+    clf.model = mock_model
+    clf.threshold_boost = threshold_boost
+    return clf
+
+
 def test_tuned_sbert_classify_returns_false_when_low_confidence():
     """TunedSBERTClassifier.classify should return False when confidence < 0.5."""
-    from syara.engine.classifier import TunedSBERTClassifier
     import numpy as np
 
     mock_model = MagicMock()
@@ -115,8 +126,7 @@ def test_tuned_sbert_classify_returns_false_when_low_confidence():
         np.array([1.0, 0.0]) if text == "rule_text" else np.array([0.0, 1.0])
     )
 
-    with patch('syara.engine.classifier.SentenceTransformer', return_value=mock_model):
-        clf = TunedSBERTClassifier(threshold_boost=0.0)
+    clf = _make_tuned_sbert_clf(mock_model, threshold_boost=0.0)
 
     is_match, confidence = clf.classify("rule_text", "input_text")
     # similarity ≈ 0, boost=0 → confidence ≈ 0 < 0.5 → is_match=False
@@ -126,15 +136,13 @@ def test_tuned_sbert_classify_returns_false_when_low_confidence():
 
 def test_tuned_sbert_classify_returns_true_when_high_confidence():
     """TunedSBERTClassifier.classify should return True when confidence >= 0.5."""
-    from syara.engine.classifier import TunedSBERTClassifier
     import numpy as np
 
     mock_model = MagicMock()
     vec = np.array([1.0, 0.0])
     mock_model.encode.return_value = vec
 
-    with patch('syara.engine.classifier.SentenceTransformer', return_value=mock_model):
-        clf = TunedSBERTClassifier(threshold_boost=0.0)
+    clf = _make_tuned_sbert_clf(mock_model, threshold_boost=0.0)
 
     is_match, confidence = clf.classify("same text", "same text")
     # similarity = 1.0, boost=0 → confidence = 1.0 ≥ 0.5 → True
@@ -146,14 +154,18 @@ def test_tuned_sbert_classify_returns_true_when_high_confidence():
 # Improvement 4: word-boundary _parse_response
 # ─────────────────────────────────────────────
 
+def _make_openai_evaluator():
+    """Helper: create an OpenAIEvaluator without actually calling OpenAI()."""
+    from syara.engine.llm_evaluator import OpenAIEvaluator
+    ev = OpenAIEvaluator.__new__(OpenAIEvaluator)
+    ev.model_name = 'gpt-3.5-turbo'
+    ev.client = MagicMock()
+    return ev
+
+
 def test_openai_parse_response_yes():
     """_parse_response should parse 'YES: explanation' correctly."""
-    from syara.engine.llm_evaluator import OpenAIEvaluator
-
-    with patch('syara.engine.llm_evaluator.OpenAI'):
-        ev = OpenAIEvaluator.__new__(OpenAIEvaluator)
-        ev.model_name = 'gpt-3.5-turbo'
-        ev.client = MagicMock()
+    ev = _make_openai_evaluator()
 
     is_match, explanation = ev._parse_response("YES: it matched")
     assert is_match is True
@@ -161,20 +173,14 @@ def test_openai_parse_response_yes():
 
 
 def test_openai_parse_response_no():
-    from syara.engine.llm_evaluator import OpenAIEvaluator
-
-    with patch('syara.engine.llm_evaluator.OpenAI'):
-        ev = OpenAIEvaluator.__new__(OpenAIEvaluator)
+    ev = _make_openai_evaluator()
 
     is_match, explanation = ev._parse_response("NO: it did not match")
     assert is_match is False
 
 
 def test_openai_parse_response_ambiguous():
-    from syara.engine.llm_evaluator import OpenAIEvaluator
-
-    with patch('syara.engine.llm_evaluator.OpenAI'):
-        ev = OpenAIEvaluator.__new__(OpenAIEvaluator)
+    ev = _make_openai_evaluator()
 
     is_match, explanation = ev._parse_response("MAYBE: not sure")
     assert is_match is False
@@ -208,17 +214,12 @@ def test_oss_parse_response_no_word_boundary():
 
 def test_openai_evaluate_returns_3_tuple():
     """OpenAIEvaluator.evaluate should return (bool, str, float)."""
-    from syara.engine.llm_evaluator import OpenAIEvaluator
-
-    with patch('syara.engine.llm_evaluator.OpenAI'):
-        ev = OpenAIEvaluator.__new__(OpenAIEvaluator)
-        ev.model_name = 'gpt-3.5-turbo'
+    ev = _make_openai_evaluator()
 
     # Mock the client
     mock_response = MagicMock()
     mock_response.choices[0].message.content = "YES: it matches"
     mock_response.choices[0].logprobs = None
-    ev.client = MagicMock()
     ev.client.chat.completions.create.return_value = mock_response
 
     result = ev.evaluate("pattern", "input text")
