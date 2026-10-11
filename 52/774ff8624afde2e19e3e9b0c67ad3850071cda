@@ -1,0 +1,19 @@
+syara/compiled_rules.py
+  s_cc8756834edad4::t_1ef4d9192a299a 212-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "52774ff8624afde2e19e3e9b0c67ad3850071cda",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
