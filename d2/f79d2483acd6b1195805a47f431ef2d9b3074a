@@ -1,0 +1,29 @@
+workshop/00_setup.ipynb
+  s_cc8756834edad4::t_a0733e2134e6b9 1-159
+workshop/02_classifiers_and_fields.ipynb
+  s_cc8756834edad4::t_41cee412f5a6c7 1-429
+workshop/03_decision_and_llm.ipynb
+  s_cc8756834edad4::t_90a61a2edaee1a 1-588
+workshop/01_strings_and_similarity.ipynb
+  s_cc8756834edad4::t_2eb9afe913e71d 1-577
+workshop/README.md
+  s_cc8756834edad4::t_54434c36732ad7 1-71
+workshop/04_boss_challenge.ipynb
+  s_cc8756834edad4::t_5663ce02f076d4 1-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d2f79d2483acd6b1195805a47f431ef2d9b3074a",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
