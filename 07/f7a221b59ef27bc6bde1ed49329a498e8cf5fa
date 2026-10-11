@@ -1,0 +1,35 @@
+tests/test_library.py
+  s_cc8756834edad4::t_af9607232cc6c2 1116-1120
+  s_cc8756834edad4::t_6b191d39467084 1113-1115
+  s_cc8756834edad4::t_b5588665c146ad 1121-1123
+  s_152910fe5b268d::t_e277398f7842a2 1-1112,1124-1668
+tests/test_improvements.py
+  s_cc8756834edad4::t_469f8245476b93 13-22,31,45,60,84
+  s_cc8756834edad4::t_6d1fcec364c4a7 109-118,129,145
+  s_cc8756834edad4::t_fa77477faad49c 157-158,160-164,166-168,176,183
+  s_cc8756834edad4::t_f80158bb794a16 217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "07f7a221b59ef27bc6bde1ed49329a498e8cf5fa",
+  "prompts": {},
+  "sessions": {
+    "s_152910fe5b268d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-af47d5f7210028320",
+        "model": "unknown"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    },
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
