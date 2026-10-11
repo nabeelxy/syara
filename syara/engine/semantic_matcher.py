@@ -2,7 +2,7 @@
 Semantic similarity matching using embeddings.
 """
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import numpy as np
 from syara.models import SimilarityRule, MatchDetail
 
@@ -61,6 +61,7 @@ class SBERTMatcher(SemanticMatcher):
 
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
+        self._embedding_cache: Dict[str, np.ndarray] = {}
 
     def embed(self, text: str) -> np.ndarray:
         """Generate SBERT embedding for text."""
@@ -68,7 +69,11 @@ class SBERTMatcher(SemanticMatcher):
             # Return zero vector for empty text
             return np.zeros(self.model.get_sentence_embedding_dimension())
 
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+
         embedding = self.model.encode(text, convert_to_numpy=True)
+        self._embedding_cache[text] = embedding
         return embedding
 
     def get_similarity(self, text1: str, text2: str) -> float:
