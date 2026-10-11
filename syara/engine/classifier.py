@@ -181,6 +181,10 @@ class TunedSBERTClassifier(SemanticClassifier):
         self.threshold_boost = 0.5 - best_threshold
 
 
+# Alias for backward compatibility and clearer naming
+CalibratedSBERTClassifier = TunedSBERTClassifier
+
+
 class DistilBERTClassifier(SemanticClassifier):
     """
     Alternative classifier using DistilBERT for efficiency.

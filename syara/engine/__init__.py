@@ -13,7 +13,7 @@ from syara.engine.chunker import (
 )
 from syara.engine.string_matcher import StringMatcher
 from syara.engine.semantic_matcher import SemanticMatcher, SBERTMatcher
-from syara.engine.classifier import SemanticClassifier, TunedSBERTClassifier, DistilBERTClassifier
+from syara.engine.classifier import SemanticClassifier, TunedSBERTClassifier, CalibratedSBERTClassifier, DistilBERTClassifier
 from syara.engine.llm_evaluator import LLMEvaluator, OpenAIEvaluator, OSSLLMEvaluator
 
 __all__ = [
@@ -37,6 +37,7 @@ __all__ = [
     # Classifiers
     'SemanticClassifier',
     'TunedSBERTClassifier',
+    'CalibratedSBERTClassifier',
     'DistilBERTClassifier',
     # LLM Evaluators
     'LLMEvaluator',
