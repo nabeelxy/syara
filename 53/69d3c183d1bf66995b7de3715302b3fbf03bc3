@@ -1,0 +1,22 @@
+syara/engine/classifier.py
+  s_cc8756834edad4::t_45c66f5e509eb1 184-187
+syara/engine/__init__.py
+  s_cc8756834edad4::t_f83141aa99b1cf 40
+  s_cc8756834edad4::t_e8d939b7db388b 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "5369d3c183d1bf66995b7de3715302b3fbf03bc3",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
