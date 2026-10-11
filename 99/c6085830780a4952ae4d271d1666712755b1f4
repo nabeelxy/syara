@@ -1,0 +1,21 @@
+syara/engine/llm_evaluator.py
+  s_cc8756834edad4::t_a0cdf831eea000 246,248,250
+  s_cc8756834edad4::t_583e7d403d0af3 100,102,105
+  s_cc8756834edad4::t_a8e2c4071a6362 4-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "99c6085830780a4952ae4d271d1666712755b1f4",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
