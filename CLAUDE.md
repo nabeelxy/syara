@@ -31,17 +31,18 @@ pip install -e ".[all,dev]"
 .syara rule file → SYaraParser → [Rule] → SYaraCompiler → CompiledRules → .match(text)
 ```
 
-The public API entry point is `syara.compile(path)` (in `syara/compiler.py`), which runs parse + validate and returns a `CompiledRules` object. `CompiledRules.match(text)` and `CompiledRules.match_file(path)` are the two execution methods.
+The public API entry points are `syara.compile(path)` and `syara.compile_string(content)` (in `syara/compiler.py`), which run parse + validate and return a `CompiledRules` object.
 
 ### Rule execution order (cost-optimized)
 
-Inside `CompiledRules._execute_rule` (`compiled_rules.py`), patterns are evaluated cheapest-first with short-circuit for LLM calls:
+Inside `CompiledRules._execute_rule` (`compiled_rules.py`), patterns run cheapest-first. Both classifiers and LLMs are short-circuited via `_is_identifier_needed` — skipped when the condition result is already determined:
 
-1. String/regex (`engine/string_matcher.py`)
-2. Semantic similarity via SBERT (`engine/semantic_matcher.py`)
-3. Perceptual hash on binary files — only when `match_file()` is called (`engine/phash_matcher.py`)
-4. Classifier (`engine/classifier.py`)
-5. LLM — only called when it can still change the condition outcome (`engine/llm_evaluator.py`)
+1. Field matching (`engine/field_matcher.py`) — Sigma-style key:value, same cost as strings
+2. String/regex (`engine/string_matcher.py`)
+3. Semantic similarity via SBERT (`engine/semantic_matcher.py`)
+4. Perceptual hash — only when `match_file()` is called (`engine/phash_matcher.py`)
+5. Classifier — skipped if condition already determined (`engine/classifier.py`)
+6. LLM — skipped if condition already determined (`engine/llm_evaluator.py`)
 
 All identifiers are pre-initialised with `[]` in `pattern_matches` before any matcher runs, so `all of them` / `all of ($prefix*)` correctly treats un-matched patterns as False.
 
@@ -61,35 +62,64 @@ rules = syara.SYaraCompiler(config_manager).compile("rules.syara")
 
 | Section | Cost tier | Key params |
 |---------|-----------|-----------|
-| `strings:` | cheapest | `nocase`, regex `/pattern/i` |
+| `fields:` | cheapest | `nocase`, regex `/pattern/i` |
+| `strings:` | cheapest | `nocase`, regex `/pattern/i`, `wide` |
 | `similarity:` | moderate | `threshold`, `matcher`, `cleaner`, `chunker` |
 | `phash:` | moderate | `threshold`, `hasher` |
 | `classifier:` | high | `threshold`, `classifier`, `cleaner`, `chunker` |
 | `llm:` | highest | `llm`, `cleaner`, `chunker` |
 
-The `condition:` block supports YARA boolean syntax: `$id and $id2`, `any of ($prefix*)`, `all of them`, `not $id`, etc. Note the exact keyword is `condition:` — a trailing `s` silently drops the block.
+The `condition:` block supports YARA boolean syntax: `$id and $id2`, `any of ($prefix*)`, `all of them`, `not $id`, etc.
 
-### Known parser limitation
+Sections can appear in any order inside a rule body (order-independent parser).
 
-`_split_rules` in `parser.py` uses a regex (`[^}]*`) that consumes `{` from quantifiers, so `{n,m}` in string patterns truncates rule body parsing. Workaround: avoid `{n,m}` quantifiers in `.syara` regex patterns. This is tracked as an XFAIL test.
+### fields: section (Sigma-style)
+
+```
+fields:
+    $evt  = EventID = "4625"
+    $proc = process.name = "mimikatz.exe" nocase
+    $port = dest.port = /^(445|4444)$/
+```
+
+Pass a `fields` dict to `match()`:
+
+```python
+rules.match(text, fields={"EventID": "4625", "process.name": "cmd.exe"})
+rules.match_any(text, fields=event)
+rules.matched(text, fields=event)
+```
+
+If a field name is absent from the dict, that identifier evaluates to False.
+
+### Condition evaluation (`_BoolEval`)
+
+`compiled_rules.py` uses a recursive-descent parser (`_BoolEval`) to evaluate translated boolean expressions — no `eval()` is used. After `_translate_yara_condition` replaces all `$id` tokens with `True`/`False`, `_BoolEval` handles `and`, `or`, `not`, and parentheses.
 
 ### Session cache (`syara/cache.py`)
 
 `TextCache` (SHA-256 keyed) is created per `match()` call and cleared in a `finally` block. Cleaned text is cached so multiple patterns with the same cleaner don't re-clean.
 
+`SBERTMatcher` maintains a persistent `_embedding_cache` (dict keyed by text) across all `match()` calls. Pattern strings (which never change after compile) are encoded only once, ever.
+
 ## Key files
 
 | File | Purpose |
 |------|---------|
-| `syara/compiler.py` | `compile()` public entry point, validation |
-| `syara/compiled_rules.py` | `CompiledRules` — execution engine |
-| `syara/parser.py` | `.syara` DSL parser |
-| `syara/models.py` | Dataclasses: `Rule`, `*Rule`, `Match`, `MatchDetail` |
+| `syara/compiler.py` | `compile()` and `compile_string()` public entry points, validation |
+| `syara/compiled_rules.py` | `CompiledRules` — execution engine, `match_any()`, `matched()` |
+| `syara/parser.py` | `.syara` DSL parser (order-independent sections, escaped regex slashes) |
+| `syara/models.py` | Dataclasses: `Rule`, `*Rule`, `FieldRule`, `Match`, `MatchDetail` |
 | `syara/config.py` | `ConfigManager` — component registry + lazy init |
+| `syara/engine/field_matcher.py` | `FieldMatcher` — literal/regex matching against event fields |
 | `syara/engine/` | Pluggable cleaners, chunkers, matchers, classifiers, LLMs |
 | `syara/config.yaml` | Default component registry (shipped with package) |
 | `tests/test_basic.py` | Unit tests for models, cleaners, chunkers, cache, parser |
-| `examples/` | Working runnable examples; `sample_rules.syara` is canonical |
+| `tests/test_library.py` | Extended library tests |
+| `tests/test_improvements.py` | Tests for all 12 improvements |
+| `tests/test_fields.py` | Tests for fields: section |
+| `examples/sample_rules.syara` | Canonical example rules |
+| `examples/field_matching.py` | Fields / Sigma-style matching example |
 
 ## Optional dependencies
 
@@ -101,28 +131,8 @@ Core deps are only `numpy` and `pyyaml`. All ML components are behind optional e
 - `all` — everything above
 - `dev` — pytest, black, flake8, mypy
 
-## Recent Improvements
+## Known issues
 
-1. **SBERTMatcher embedding cache** (`engine/semantic_matcher.py`): Added `_embedding_cache: Dict[str, np.ndarray]` per instance. `embed()` returns cached result on repeated calls; `get_similarity_batch()` only batch-encodes uncached texts.
-
-2. **classify() return contract** (`engine/classifier.py`): `TunedSBERTClassifier.classify` and `DistilBERTClassifier.classify` now correctly return `(confidence >= 0.5, confidence)` instead of always returning `True` as first element.
-
-3. **Word-boundary _parse_response** (`engine/llm_evaluator.py`): Both `OpenAIEvaluator` and `OSSLLMEvaluator` use `re.match(r'YES\b', ...)` / `re.match(r'NO\b', ...)` so strings like "YESTERDAY" or "NOPE" don't false-trigger.
-
-4. **LLM confidence scores** (`engine/llm_evaluator.py`): `evaluate()` now returns a 3-tuple `(is_match, explanation, confidence)`. OpenAI uses logprobs; OSS uses token probability of YES/NO output token. `evaluate_chunks()` updated to unpack 3-tuple and store confidence as `score`.
-
-5. **Order-independent parser sections** (`parser.py`): Replaced regex-based section extraction with `_split_sections()` that finds all section headers via `_SECTION_RE` and slices content between them. Sections can now appear in any order in `.syara` files.
-
-6. **Escaped slashes in regex patterns** (`parser.py`): `_parse_strings_content` regex changed from `/([^/]*)/(i?)` to `/((?:[^/\\]|\\.)+)/([is]*)` — handles `\/` inside patterns and supports multiple inline flags (e.g., `/pattern/is`).
-
-7. **compile_string() public API** (`compiler.py`, `__init__.py`): Module-level `compile_string(rule_content, ...)` function added alongside existing `compile(filepath, ...)`. Exported in `__all__`.
-
-8. **_BoolEval replaces eval()** (`compiled_rules.py`): Added `_BoolEval` recursive-descent parser that evaluates `True/False/and/or/not/(...)` expressions without `eval()`. Used in `_evaluate_condition` and `_is_identifier_needed`.
-
-9. **Classifier short-circuit** (`compiled_rules.py`): Step 4 of `_execute_rule` now calls `_is_identifier_needed` before running classifier, skipping it when the condition outcome cannot change (mirrors existing LLM short-circuit).
-
-10. **match_any() and matched() helpers** (`compiled_rules.py`): `match_any(text)` returns only matched rules; `matched(text)` returns a bool. Both are convenience wrappers over `match()`.
-
-11. **CalibratedSBERTClassifier alias** (`engine/classifier.py`, `engine/__init__.py`): `CalibratedSBERTClassifier = TunedSBERTClassifier` alias added for clearer naming and backward compat. Exported from `syara.engine`.
-
-12. **fields: section** (`models.py`, `parser.py`, `compiled_rules.py`, `compiler.py`, `engine/field_matcher.py`): New DSL section for Sigma-style key:value field matching. Format: `$id = field_name = "value" [nocase]` or `$id = field_name = /regex/`. `match(text, fields={"EventID": "4624"})` passes field dict to execution engine. `FieldMatcher` uses exact equality for literals and `re.search` for regexes.
+- **transformers 5.x breaks DeBERTa-v3-small**: tiktoken misidentifies the SentencePiece `.spm.model` file. Pin `transformers<5.0`.
+- **`condition:` not `conditions:`**: Parser looks for exact keyword — trailing `s` silently drops the condition block.
+- **`//` in regex patterns stripped**: The comment-removal pass (`//` to end-of-line) runs before the regex body parser. Use `\/` (escaped slash) inside regex patterns to avoid this; the parser unescapes `\/` to `/` after capture.
