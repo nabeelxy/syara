@@ -1,0 +1,22 @@
+syara/compiler.py
+  s_cc8756834edad4::t_aabe6bfaa994b5 211-238
+syara/__init__.py
+  s_cc8756834edad4::t_1aef5acf83f552 21
+  s_cc8756834edad4::t_db2926968bd3fd 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0ab7f91023268e61325dc3782d1cd7a9375746de",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
