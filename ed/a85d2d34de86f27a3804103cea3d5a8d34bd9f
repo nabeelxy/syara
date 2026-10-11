@@ -1,0 +1,38 @@
+README.md
+  s_cc8756834edad4::t_044266ce6c3168 613-614,617-619
+  s_cc8756834edad4::t_d7f5a563ac42d9 725-759
+  s_cc8756834edad4::t_fa3254d45f7c19 61
+  s_cc8756834edad4::t_9b685f41c2ce0d 389-441,443-450,453-457,460-487
+  s_cc8756834edad4::t_4b90c0ed55c438 779-780
+  s_cc8756834edad4::t_95b57b0b00c1db 198,214-221,224,227,230-251
+  s_cc8756834edad4::t_663fb89291f212 22,24-25
+  s_cc8756834edad4::t_2ac51b9f98e0c5 222-223,225-226,228-229
+  s_cc8756834edad4::t_828ad9f7372165 442,451,458-459
+  s_cc8756834edad4::t_9aaba2745fb292 69
+  s_cc8756834edad4::t_eeca8606b496c9 452
+  s_cc8756834edad4::t_4502533a2a8e8d 252
+examples/sample_rules.syara
+  s_cc8756834edad4::t_490afb657adf7c 167-243
+CLAUDE.md
+  s_cc8756834edad4::t_f9a4257a852b53 134-153
+examples/decision_model.py
+  s_cc8756834edad4::t_f146faf08db4ac 1-103,105-116,118-133,135-142,144-149,151-220
+  s_cc8756834edad4::t_50c7aa8b8b5d4e 104
+  s_cc8756834edad4::t_ecd9ff091ab64a 117,134,143,150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "eda85d2d34de86f27a3804103cea3d5a8d34bd9f",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
