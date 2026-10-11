@@ -1,13 +1,89 @@
 """
 Execution engine for compiled rules.
 """
-from typing import List, Dict
+from typing import Dict, List, Optional
 import re
 import warnings
 from syara.models import Rule, Match, MatchDetail
 from syara.config import ConfigManager
 from syara.cache import TextCache
 from syara.engine.string_matcher import StringMatcher
+
+
+class _BoolEval:
+    """
+    Recursive-descent parser/evaluator for boolean expressions
+    containing True, False, and, or, not, and parentheses.
+    Avoids the use of eval() for security.
+    """
+
+    def __init__(self, expr: str):
+        self._tokens = self._tokenize(expr)
+        self._pos = 0
+
+    def _tokenize(self, expr: str):
+        token_re = re.compile(
+            r'\bTrue\b|\bFalse\b|\band\b|\bor\b|\bnot\b|[()]',
+            re.IGNORECASE
+        )
+        return [m.group(0) for m in token_re.finditer(expr)]
+
+    def _peek(self) -> Optional[str]:
+        if self._pos < len(self._tokens):
+            return self._tokens[self._pos]
+        return None
+
+    def _consume(self) -> str:
+        tok = self._tokens[self._pos]
+        self._pos += 1
+        return tok
+
+    def evaluate(self) -> bool:
+        result = self._parse_or()
+        return result
+
+    def _parse_or(self) -> bool:
+        left = self._parse_and()
+        while self._peek() and self._peek().lower() == 'or':
+            self._consume()
+            right = self._parse_and()
+            left = left or right
+        return left
+
+    def _parse_and(self) -> bool:
+        left = self._parse_not()
+        while self._peek() and self._peek().lower() == 'and':
+            self._consume()
+            right = self._parse_not()
+            left = left and right
+        return left
+
+    def _parse_not(self) -> bool:
+        if self._peek() and self._peek().lower() == 'not':
+            self._consume()
+            operand = self._parse_not()
+            return not operand
+        return self._parse_atom()
+
+    def _parse_atom(self) -> bool:
+        tok = self._peek()
+        if tok is None:
+            return False
+        if tok == '(':
+            self._consume()
+            result = self._parse_or()
+            if self._peek() == ')':
+                self._consume()
+            return result
+        if tok.lower() == 'true':
+            self._consume()
+            return True
+        if tok.lower() == 'false':
+            self._consume()
+            return False
+        # Unknown token — skip it and return False
+        self._consume()
+        return False
 
 
 class CompiledRules:
@@ -240,29 +316,23 @@ class CompiledRules:
         """
         Determine if an identifier needs to be evaluated based on condition.
 
-        Uses optimistic short-circuit evaluation: assume this identifier would
-        match (best case), then evaluate the full condition with the current
-        pattern_matches.  If the condition is still False even with the
-        identifier set to True, the identifier cannot affect the outcome and
-        can be skipped — avoiding expensive LLM calls when a required
-        pre-filter pattern has already failed.
-
-        Args:
-            identifier: Pattern identifier (e.g., "$llm_rule")
-            condition: Condition string
-            current_matches: Already evaluated patterns
-
-        Returns:
-            True if the identifier might change the outcome, False if safe to skip
+        Compares the condition result with identifier absent vs present.
+        If the result differs, the identifier can change the outcome and must be evaluated.
         """
-        # Optimistically assume this identifier matches
-        test_matches = dict(current_matches)
-        test_matches[identifier] = [MatchDetail(identifier=identifier, matched_text="")]
+        # State without this identifier (set to empty)
+        matches_without = dict(current_matches)
+        matches_without[identifier] = []
+
+        # State with this identifier (optimistically set to matched)
+        matches_with = dict(current_matches)
+        matches_with[identifier] = [MatchDetail(identifier=identifier, matched_text="")]
 
         try:
-            test_expr = self._translate_yara_condition(condition, test_matches)
-            result = eval(test_expr, {"__builtins__": {}}, {})
-            return bool(result)
+            expr_without = self._translate_yara_condition(condition, matches_without)
+            expr_with = self._translate_yara_condition(condition, matches_with)
+            result_without = _BoolEval(expr_without).evaluate()
+            result_with = _BoolEval(expr_with).evaluate()
+            return result_without != result_with
         except Exception:
             return True  # conservative: evaluate if unsure
 
@@ -289,12 +359,9 @@ class CompiledRules:
 
         # Evaluate the expression safely
         try:
-            # Use Python's eval with restricted namespace for safety
-            result = eval(eval_expr, {"__builtins__": {}}, {})
+            result = _BoolEval(eval_expr).evaluate()
             return bool(result)
-
         except Exception as e:
-            # If evaluation fails, warn and return False
             warnings.warn(
                 f"Failed to evaluate condition '{condition}': {e}",
                 UserWarning,
