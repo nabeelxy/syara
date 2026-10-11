@@ -84,7 +84,7 @@ class TunedSBERTClassifier(SemanticClassifier):
         # In practice, this would be replaced by actual classification logits
         confidence = max(0.0, min(1.0, similarity + self.threshold_boost))
 
-        return True, float(confidence)
+        return confidence >= 0.5, float(confidence)
 
     @staticmethod
     def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
@@ -219,7 +219,8 @@ class DistilBERTClassifier(SemanticClassifier):
         # Compute similarity
         similarity = self._cosine_similarity(emb1, emb2)
 
-        return True, float(max(0.0, min(1.0, similarity)))
+        confidence = float(max(0.0, min(1.0, similarity)))
+        return confidence >= 0.5, confidence
 
     def _get_embedding(self, text: str) -> np.ndarray:
         """Get DistilBERT embedding for text."""
