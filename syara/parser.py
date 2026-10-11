@@ -17,6 +17,12 @@ from syara.models import (
 class SYaraParser:
     """Parser for YARA-compatible .syara files."""
 
+    # Section header regex: keyword followed by colon, not inside strings/identifiers
+    _SECTION_RE = re.compile(
+        r'(?<!["\$\w])(meta|strings|similarity|phash|classifier|llm|condition)[ \t]*:',
+        re.IGNORECASE
+    )
+
     def __init__(self):
         """Initialize parser."""
         self.current_line = 0
@@ -204,9 +210,27 @@ class SYaraParser:
 
         return blocks
 
+    def _split_sections(self, body: str) -> Dict[str, str]:
+        """
+        Find all section headers in body and return a dict of section_name -> content.
+        Sections can appear in any order.
+        """
+        sections: Dict[str, str] = {}
+        # Find all matches for section headers
+        matches = list(self._SECTION_RE.finditer(body))
+        for idx, m in enumerate(matches):
+            section_name = m.group(1).lower()
+            content_start = m.end()
+            # Content ends at next section header (or end of body)
+            if idx + 1 < len(matches):
+                content_end = matches[idx + 1].start()
+            else:
+                content_end = len(body)
+            sections[section_name] = body[content_start:content_end]
+        return sections
+
     def _parse_rule_block(self, block: str) -> Rule:
         """Parse a single rule block."""
-        # Extract rule header: rule name : tags
         header_match = re.match(r'rule\s+(\w+)(?:\s*:\s*([\w\s]+))?\s*\{', block)
 
         if not header_match:
@@ -221,14 +245,17 @@ class SYaraParser:
         body_end = block.rfind('}')
         body = block[body_start:body_end]
 
-        # Parse sections
-        meta = self._parse_meta_section(body)
-        strings = self._parse_strings_section(body)
-        similarity = self._parse_similarity_section(body)
-        phash = self._parse_phash_section(body)
-        classifier = self._parse_classifier_section(body)
-        llm = self._parse_llm_section(body)
-        condition = self._parse_condition_section(body)
+        # Split body into sections (order-independent)
+        sections = self._split_sections(body)
+
+        # Parse each section
+        meta = self._parse_meta_content(sections.get('meta', ''))
+        strings = self._parse_strings_content(sections.get('strings', ''))
+        similarity = self._parse_similarity_content(sections.get('similarity', ''))
+        phash = self._parse_phash_content(sections.get('phash', ''))
+        classifier = self._parse_classifier_content(sections.get('classifier', ''))
+        llm = self._parse_llm_content(sections.get('llm', ''))
+        condition = sections.get('condition', '').strip()
 
         return Rule(
             name=rule_name,
@@ -242,57 +269,32 @@ class SYaraParser:
             condition=condition
         )
 
-    def _parse_meta_section(self, body: str) -> Dict[str, str]:
-        """Parse meta section."""
+    def _parse_meta_content(self, content: str) -> Dict[str, str]:
+        """Parse meta section content."""
         meta = {}
-
-        # Find meta section
-        meta_match = re.search(r'meta:\s*(.*?)(?=\n\s*(?:strings|similarity|phash|classifier|llm|condition):|$)', body, re.DOTALL)
-
-        if not meta_match:
-            return meta
-
-        meta_content = meta_match.group(1)
-
-        # Parse key = "value" pairs
-        for line in meta_content.split('\n'):
+        for line in content.split('\n'):
             line = line.strip()
             if not line:
                 continue
-
-            # Match: key = "value"
             match = re.match(r'(\w+)\s*=\s*"([^"]*)"', line)
             if match:
                 key, value = match.groups()
                 meta[key] = value
-
         return meta
 
-    def _parse_strings_section(self, body: str) -> List[StringRule]:
-        """Parse strings section."""
+    def _parse_strings_content(self, content: str) -> List[StringRule]:
+        """Parse strings section content."""
         strings = []
-
-        # Find strings section
-        strings_match = re.search(r'strings:\s*(.*?)(?=\n\s*(?:similarity|phash|classifier|llm|condition):|$)', body, re.DOTALL)
-
-        if not strings_match:
-            return strings
-
-        strings_content = strings_match.group(1)
-
-        # Parse each string rule
-        for line in strings_content.split('\n'):
+        for line in content.split('\n'):
             line = line.strip()
             if not line:
                 continue
 
-            # Match: $identifier = "pattern" modifiers or $identifier = /regex/ modifiers
             # String pattern
             match = re.match(r'(\$\w+)\s*=\s*"([^"]*)"\s*(.*)', line)
             if match:
                 identifier, pattern, modifiers_str = match.groups()
                 modifiers = [m.strip() for m in modifiers_str.split() if m.strip()]
-
                 strings.append(StringRule(
                     identifier=identifier,
                     pattern=pattern,
@@ -301,7 +303,7 @@ class SYaraParser:
                 ))
                 continue
 
-            # Regex pattern
+            # Regex pattern (improvement 6 version - old regex, improvement 7 will update)
             match = re.match(r'(\$\w+)\s*=\s*/([^/]*)/(i?)\s*(.*)', line)
             if match:
                 identifier, pattern, i_flag, modifiers_str = match.groups()
@@ -319,44 +321,24 @@ class SYaraParser:
 
         return strings
 
-    def _parse_similarity_section(self, body: str) -> List[SimilarityRule]:
-        """Parse similarity section."""
+    def _parse_similarity_content(self, content: str) -> List[SimilarityRule]:
+        """Parse similarity section content."""
         similarity_rules = []
-
-        # Find similarity section
-        sim_match = re.search(r'similarity:\s*(.*?)(?=\n\s*(?:phash|classifier|llm|condition):|$)', body, re.DOTALL)
-
-        if not sim_match:
-            return similarity_rules
-
-        sim_content = sim_match.group(1)
-
-        # Parse each similarity rule
-        # Format: $identifier = "pattern" threshold=0.8 matcher="sbert" cleaner="default" chunker="sentence"
-        for line in sim_content.split('\n'):
+        for line in content.split('\n'):
             line = line.strip()
             if not line:
                 continue
-
-            # Match: $identifier = "pattern" parameters
             match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
             if not match:
                 continue
-
-            # Extract identifier, pattern, and parameters
             identifier = match.group(1)
             pattern = match.group(2)
             params_str = match.group(3).strip()
-
-            # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
-
-            # Extract parameters with defaults
             threshold = float(parsed_params.get('threshold', 0.8))
             cleaner_name = parsed_params.get('cleaner', 'default_cleaning')
             chunker_name = parsed_params.get('chunker', 'no_chunking')
             matcher_name = parsed_params.get('matcher', 'sbert')
-
             similarity_rules.append(SimilarityRule(
                 identifier=identifier,
                 pattern=pattern,
@@ -365,93 +347,50 @@ class SYaraParser:
                 chunker_name=chunker_name,
                 matcher_name=matcher_name
             ))
-
         return similarity_rules
 
-    def _parse_phash_section(self, body: str) -> List[PHashRule]:
-        """Parse phash section."""
+    def _parse_phash_content(self, content: str) -> List[PHashRule]:
+        """Parse phash section content."""
         phash_rules = []
-
-        # Find phash section
-        phash_match = re.search(r'phash:\s*(.*?)(?=\n\s*(?:classifier|llm|condition):|$)', body, re.DOTALL)
-
-        if not phash_match:
-            return phash_rules
-
-        phash_content = phash_match.group(1)
-
-        # Parse each phash rule
-        # Format: $identifier = "file_path" threshold=0.9 hasher="imagehash"
-        for line in phash_content.split('\n'):
+        for line in content.split('\n'):
             line = line.strip()
             if not line:
                 continue
-
-            # Match: $identifier = "file_path" parameters
             match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
             if not match:
                 continue
-
-            # Extract identifier, file_path, and parameters
             identifier = match.group(1)
             file_path = match.group(2)
             params_str = match.group(3).strip()
-
-            # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
-
-            # Extract parameters with defaults
             threshold = float(parsed_params.get('threshold', 0.9))
-            # Support both 'hasher' and 'phash' as parameter names
             phash_name = parsed_params.get('hasher', parsed_params.get('phash', 'imagehash'))
-
             phash_rules.append(PHashRule(
                 identifier=identifier,
                 file_path=file_path,
                 threshold=threshold,
                 phash_name=phash_name
             ))
-
         return phash_rules
 
-    def _parse_classifier_section(self, body: str) -> List[ClassifierRule]:
-        """Parse classifier section."""
+    def _parse_classifier_content(self, content: str) -> List[ClassifierRule]:
+        """Parse classifier section content."""
         classifier_rules = []
-
-        # Find classifier section
-        class_match = re.search(r'classifier:\s*(.*?)(?=\n\s*(?:llm|condition):|$)', body, re.DOTALL)
-
-        if not class_match:
-            return classifier_rules
-
-        class_content = class_match.group(1)
-
-        # Parse each classifier rule
-        # Format: $identifier = "pattern" threshold=0.7 classifier="deberta" cleaner="default" chunker="sentence"
-        for line in class_content.split('\n'):
+        for line in content.split('\n'):
             line = line.strip()
             if not line:
                 continue
-
-            # Match: $identifier = "pattern" parameters
             match = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
             if not match:
                 continue
-
-            # Extract identifier, pattern, and parameters
             identifier = match.group(1)
             pattern = match.group(2)
             params_str = match.group(3).strip()
-
-            # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
-
-            # Extract parameters with defaults
             threshold = float(parsed_params.get('threshold', 0.7))
             cleaner_name = parsed_params.get('cleaner', 'default_cleaning')
             chunker_name = parsed_params.get('chunker', 'no_chunking')
             classifier_name = parsed_params.get('classifier', 'tuned-sbert')
-
             classifier_rules.append(ClassifierRule(
                 identifier=identifier,
                 pattern=pattern,
@@ -460,38 +399,22 @@ class SYaraParser:
                 chunker_name=chunker_name,
                 classifier_name=classifier_name
             ))
-
         return classifier_rules
 
-    def _parse_llm_section(self, body: str) -> List[LLMRule]:
-        """Parse LLM section."""
+    def _parse_llm_content(self, content: str) -> List[LLMRule]:
+        """Parse LLM section content."""
         llm_rules = []
-
-        # Find LLM section
-        llm_match = re.search(r'llm:\s*(.*?)(?=\n\s*condition:|$)', body, re.DOTALL)
-
-        if not llm_match:
-            return llm_rules
-
-        llm_content = llm_match.group(1)
-
-        # Parse each LLM rule - handle both single-line and multi-line patterns
-        # Format: $identifier = "pattern" llm="gpt-4"
-        # Triple-quoted format: $identifier = """pattern""" llm="gpt-4"
 
         # Match triple-quoted patterns first
         triple_quote_pattern = r'(\$\w+)\s*=\s*"""(.*?)"""\s*(.*)$'
-        for match in re.finditer(triple_quote_pattern, llm_content, re.MULTILINE | re.DOTALL):
+        for match in re.finditer(triple_quote_pattern, content, re.MULTILINE | re.DOTALL):
             identifier = match.group(1)
             pattern = match.group(2)
             params_str = match.group(3).strip()
-
-            # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
             llm_name = parsed_params.get('llm', 'flan-t5-large')
             cleaner_name = parsed_params.get('cleaner', 'no_op')
             chunker_name = parsed_params.get('chunker', 'no_chunking')
-
             llm_rules.append(LLMRule(
                 identifier=identifier,
                 pattern=pattern,
@@ -502,21 +425,16 @@ class SYaraParser:
 
         # Match single-quoted patterns
         single_quote_pattern = r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)$'
-        for match in re.finditer(single_quote_pattern, llm_content, re.MULTILINE):
-            # Skip if this identifier was already matched by triple-quotes
+        for match in re.finditer(single_quote_pattern, content, re.MULTILINE):
             identifier = match.group(1)
             if any(r.identifier == identifier for r in llm_rules):
                 continue
-
             pattern = match.group(2)
             params_str = match.group(3).strip()
-
-            # Parse key-value parameters only
             parsed_params = self._parse_modifiers(params_str)
             llm_name = parsed_params.get('llm', 'flan-t5-large')
             cleaner_name = parsed_params.get('cleaner', 'no_op')
             chunker_name = parsed_params.get('chunker', 'no_chunking')
-
             llm_rules.append(LLMRule(
                 identifier=identifier,
                 pattern=pattern,
@@ -527,14 +445,37 @@ class SYaraParser:
 
         return llm_rules
 
+    def _parse_meta_section(self, body: str) -> Dict[str, str]:
+        """Parse meta section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_meta_content(sections.get('meta', ''))
+
+    def _parse_strings_section(self, body: str) -> List[StringRule]:
+        """Parse strings section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_strings_content(sections.get('strings', ''))
+
+    def _parse_similarity_section(self, body: str) -> List[SimilarityRule]:
+        """Parse similarity section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_similarity_content(sections.get('similarity', ''))
+
+    def _parse_phash_section(self, body: str) -> List[PHashRule]:
+        """Parse phash section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_phash_content(sections.get('phash', ''))
+
+    def _parse_classifier_section(self, body: str) -> List[ClassifierRule]:
+        """Parse classifier section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_classifier_content(sections.get('classifier', ''))
+
+    def _parse_llm_section(self, body: str) -> List[LLMRule]:
+        """Parse LLM section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return self._parse_llm_content(sections.get('llm', ''))
+
     def _parse_condition_section(self, body: str) -> str:
-        """Parse condition section."""
-        # Find condition section
-        cond_match = re.search(r'condition:\s*(.*?)$', body, re.DOTALL)
-
-        if not cond_match:
-            return ""
-
-        condition = cond_match.group(1).strip()
-
-        return condition
+        """Parse condition section (backward compat wrapper)."""
+        sections = self._split_sections(body)
+        return sections.get('condition', '').strip()
