@@ -303,15 +303,12 @@ class SYaraParser:
                 ))
                 continue
 
-            # Regex pattern (improvement 6 version - old regex, improvement 7 will update)
-            match = re.match(r'(\$\w+)\s*=\s*/([^/]*)/(i?)\s*(.*)', line)
+            # Regex pattern - supports escaped slashes and multi-char flags
+            match = re.match(r'(\$\w+)\s*=\s*/((?:[^/\\]|\\.)+)/([is]*)\s*(.*)', line)
             if match:
-                identifier, pattern, i_flag, modifiers_str = match.groups()
-                modifiers = [m.strip() for m in modifiers_str.split() if m.strip()]
-
-                if i_flag:
-                    modifiers.append('i')
-
+                identifier, pattern, inline_flags, modifiers_str = match.groups()
+                pattern = pattern.replace('\\/', '/')
+                modifiers = list(inline_flags) + [tok for tok in modifiers_str.split() if tok.strip()]
                 strings.append(StringRule(
                     identifier=identifier,
                     pattern=pattern,
