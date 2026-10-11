@@ -1,0 +1,19 @@
+syara/parser.py
+  s_cc8756834edad4::t_46613989cdbb2c 306-307,309-311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8d960c02f27876a1116450bf9efd2a951bd4f445",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
