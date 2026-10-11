@@ -108,12 +108,17 @@ class SBERTMatcher(SemanticMatcher):
         # Get embedding for reference text
         emb1 = self.embed(text1)
 
-        # Get embeddings for all comparison texts
-        embeddings = self.model.encode(texts, convert_to_numpy=True)
+        # Separate cached vs uncached texts
+        uncached_texts = [t for t in texts if t not in self._embedding_cache]
+        if uncached_texts:
+            new_embeddings = self.model.encode(uncached_texts, convert_to_numpy=True)
+            for t, emb in zip(uncached_texts, new_embeddings):
+                self._embedding_cache[t] = emb
 
-        # Compute cosine similarities
+        # Compute cosine similarities using cached embeddings
         similarities = []
-        for emb2 in embeddings:
+        for t in texts:
+            emb2 = self._embedding_cache[t]
             sim = self._cosine_similarity(emb1, emb2)
             similarities.append(max(0.0, min(1.0, sim)))
 
