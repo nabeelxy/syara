@@ -11,7 +11,8 @@ from syara.models import (
     PHashRule,
     ClassifierRule,
     LLMRule,
-    FieldRule
+    FieldRule,
+    DecisionRule,
 )
 
 
@@ -20,7 +21,7 @@ class SYaraParser:
 
     # Section header regex: keyword followed by colon, not inside strings/identifiers
     _SECTION_RE = re.compile(
-        r'(?<!["\$\w])(meta|strings|similarity|phash|classifier|llm|fields|condition)[ \t]*:',
+        r'(?<!["\$\w])(meta|strings|similarity|phash|classifier|llm|fields|decision|condition)[ \t]*:',
         re.IGNORECASE
     )
 
@@ -257,6 +258,7 @@ class SYaraParser:
         classifier = self._parse_classifier_content(sections.get('classifier', ''))
         llm = self._parse_llm_content(sections.get('llm', ''))
         fields = self._parse_fields_content(sections.get('fields', ''))
+        decision = self._parse_decision_content(sections.get('decision', ''))
         condition = sections.get('condition', '').strip()
 
         return Rule(
@@ -269,6 +271,7 @@ class SYaraParser:
             classifier=classifier,
             llm=llm,
             fields=fields,
+            decision=decision,
             condition=condition
         )
 
@@ -482,6 +485,75 @@ class SYaraParser:
                 ))
 
         return field_rules
+
+    def _parse_decision_content(self, content: str) -> List[DecisionRule]:
+        """
+        Parse decision: section content.
+
+        Supported DSL forms (one per line):
+
+        Choice — match when model's selected label equals `verdict`:
+            $d1 = "Is this malicious?" model="jev" verdict="malicious" threshold=0.6
+
+        Noul — match when model's probability >= threshold:
+            $d2 = "Probability this is a clickfix attack" model="laya" noul=0.7
+
+        Score — match when model's numeric score >= threshold:
+            $d3 = "Rate severity 0–4" model="jev" score=3.0
+
+        Optional per-rule text preprocessing (rare for decision models):
+            $d4 = "..." model="jev" verdict="yes" cleaner="default_cleaning"
+        """
+        rules: List[DecisionRule] = []
+
+        for line in content.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+
+            # $id = "question text" key=value ...
+            m = re.match(r'(\$\w+)\s*=\s*"([^"]+)"\s*(.*)', line)
+            if not m:
+                continue
+
+            identifier, question, params_str = m.group(1), m.group(2), m.group(3).strip()
+            params = self._parse_modifiers(params_str)
+
+            model_name = params.get('model', '')
+            if not model_name:
+                continue  # model is required
+
+            # Determine answer type from which param is present
+            if 'verdict' in params:
+                answer_type = 'choice'
+                positive_label = str(params['verdict'])
+                threshold = float(params.get('threshold', 0.5))
+            elif 'noul' in params:
+                answer_type = 'noul'
+                positive_label = 'yes'
+                threshold = float(params['noul'])
+            elif 'score' in params:
+                answer_type = 'score'
+                positive_label = 'yes'
+                threshold = float(params['score'])
+            else:
+                # Default: treat as choice with verdict="yes"
+                answer_type = 'choice'
+                positive_label = str(params.get('verdict', 'yes'))
+                threshold = float(params.get('threshold', 0.5))
+
+            rules.append(DecisionRule(
+                identifier=identifier,
+                question=question,
+                model_name=str(model_name),
+                answer_type=answer_type,
+                positive_label=positive_label,
+                threshold=threshold,
+                cleaner_name=str(params.get('cleaner', 'no_op')),
+                chunker_name=str(params.get('chunker', 'no_chunking')),
+            ))
+
+        return rules
 
     def _parse_fields_section(self, body: str) -> List[FieldRule]:
         """Parse fields section (backward compat wrapper)."""

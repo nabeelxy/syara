@@ -110,7 +110,8 @@ class SYaraCompiler:
             len(rule.phash) +
             len(rule.classifier) +
             len(rule.llm) +
-            len(rule.fields)
+            len(rule.fields) +
+            len(rule.decision)
         )
 
         if total_patterns == 0:
@@ -143,6 +144,8 @@ class SYaraCompiler:
             identifiers.add(s.identifier)
         for f in rule.fields:
             identifiers.add(f.identifier)
+        for d in rule.decision:
+            identifiers.add(d.identifier)
 
         # Extract identifiers from condition (simple approach)
         # This matches $identifier patterns
@@ -208,6 +211,15 @@ class SYaraCompiler:
                 self.config_manager.get_llm(llm.llm_name)
             except ValueError as e:
                 raise ValueError(f"Rule '{rule.name}', pattern '{llm.identifier}': {e}")
+
+        # Validate decision rules
+        for dec in rule.decision:
+            try:
+                self.config_manager.get_cleaner(dec.cleaner_name)
+                self.config_manager.get_chunker(dec.chunker_name)
+                self.config_manager.get_decision_evaluator(dec.model_name)
+            except ValueError as e:
+                raise ValueError(f"Rule '{rule.name}', pattern '{dec.identifier}': {e}")
 
 
 # Convenience function for direct compilation

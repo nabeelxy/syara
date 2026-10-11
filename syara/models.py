@@ -66,6 +66,35 @@ class FieldRule:
 
 
 @dataclass
+class DecisionRule:
+    """
+    Represents a structured decision-model rule (JEV / Laya / Winnow style).
+
+    The model receives a 'state' (text + optional fields dict) and a typed
+    question, then returns a structured answer.  Three answer types are
+    supported, selected by which parameter is present in the DSL:
+
+    Choice  — model picks one label from a set; match when the selected label
+               equals `positive_label` and confidence >= `threshold`.
+               DSL param: verdict="malicious"
+
+    Noul    — model returns a probability 0-1; match when value >= `threshold`.
+               DSL param: noul=0.6  (the number IS the threshold)
+
+    Score   — model returns a numeric score; match when score >= `threshold`.
+               DSL param: score=3.0  (the number IS the threshold)
+    """
+    identifier: str        # "$d1"
+    question: str          # Free-text instructions sent to the model
+    model_name: str        # "jev", "laya", "winnow", or any registered name
+    answer_type: str       # "choice", "noul", "score"
+    positive_label: str = "yes"   # For choice: the label that counts as a match
+    threshold: float = 0.5        # Confidence (choice) / probability (noul) / score threshold
+    cleaner_name: str = "no_op"
+    chunker_name: str = "no_chunking"
+
+
+@dataclass
 class MatchDetail:
     """Details of a single pattern match."""
     identifier: str
@@ -88,6 +117,7 @@ class Rule:
     classifier: List[ClassifierRule] = field(default_factory=list)
     llm: List[LLMRule] = field(default_factory=list)
     fields: List[FieldRule] = field(default_factory=list)
+    decision: List[DecisionRule] = field(default_factory=list)
     condition: str = ""
 
 

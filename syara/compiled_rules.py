@@ -4,11 +4,12 @@ Execution engine for compiled rules.
 from typing import Dict, List, Optional
 import re
 import warnings
-from syara.models import Rule, Match, MatchDetail
+from syara.models import Rule, Match, MatchDetail, DecisionRule
 from syara.config import ConfigManager
 from syara.cache import TextCache
 from syara.engine.string_matcher import StringMatcher
 from syara.engine.field_matcher import FieldMatcher
+from syara.engine.decision_evaluator import build_question_spec, DecisionResult
 
 
 class _BoolEval:
@@ -192,6 +193,8 @@ class CompiledRules:
             pattern_matches[llm_rule.identifier] = []
         for field_rule in rule.fields:
             pattern_matches[field_rule.identifier] = []
+        for dec_rule in rule.decision:
+            pattern_matches[dec_rule.identifier] = []
 
         # Execute pattern matching in cost-optimized order
 
@@ -232,7 +235,19 @@ class CompiledRules:
             if matches:
                 pattern_matches[cls_rule.identifier] = matches
 
-        # 5. LLM patterns (highest cost)
+        # 5. Decision patterns (structured model evaluation: JEV, Laya, Winnow, etc.)
+        # Use a group-level short-circuit: check whether assuming ALL decision
+        # identifiers are True would change the condition outcome.  This is
+        # necessary because individual checks cannot detect AND-chains where
+        # every identifier depends on the others (e.g. $d1 and $d2 and $d3).
+        if rule.decision and self._any_decision_needed(rule.decision, rule.condition, pattern_matches):
+            for identifier, matches in self._execute_decision_batch(
+                rule.decision, text, fields, cache
+            ).items():
+                if matches:
+                    pattern_matches[identifier] = matches
+
+        # 6. LLM patterns (highest cost)
         # Only execute if needed by condition
         for llm_rule in rule.llm:
             # Check if LLM pattern is needed for condition
@@ -310,6 +325,160 @@ class CompiledRules:
         matches = classifier.classify_chunks(rule, chunks)
 
         return matches
+
+    def _any_decision_needed(
+        self,
+        decision_rules: List[DecisionRule],
+        condition: str,
+        current_matches: Dict[str, List[MatchDetail]],
+    ) -> bool:
+        """
+        Group-level short-circuit for decision rules.
+
+        Checks whether assuming ALL decision identifiers are True (optimistic)
+        would change the condition outcome compared to the current state where
+        they are all False.  If the outcome is the same either way, executing
+        the decision models cannot affect the result and they are all skipped.
+
+        This handles AND-chains (e.g. $d1 and $d2 and $d3) where individually
+        each identifier appears unnecessary (the others are still False) but
+        together they CAN flip the condition.
+        """
+        optimistic = dict(current_matches)
+        for r in decision_rules:
+            optimistic[r.identifier] = [MatchDetail(identifier=r.identifier, matched_text="")]
+
+        try:
+            cur = _BoolEval(
+                self._translate_yara_condition(condition, current_matches)
+            ).evaluate()
+            opt = _BoolEval(
+                self._translate_yara_condition(condition, optimistic)
+            ).evaluate()
+            return cur != opt
+        except Exception:
+            return True  # conservative: evaluate if unsure
+
+    def _execute_decision_batch(
+        self,
+        rules: List[DecisionRule],
+        text: str,
+        fields: Dict,
+        cache: TextCache,
+    ) -> Dict[str, List[MatchDetail]]:
+        """
+        Execute one or more decision rules, batching by model for efficiency.
+
+        All rules that share the same model_name are sent in a single
+        `decide()` call (one question per rule identifier).  Each answer is
+        then evaluated against the rule's answer_type, positive_label, and
+        threshold to produce a list of MatchDetail objects.
+
+        Returns:
+            Dict mapping identifier -> List[MatchDetail]
+        """
+        results: Dict[str, List[MatchDetail]] = {r.identifier: [] for r in rules}
+
+        # Group rules by model so we can batch into one API call per model
+        by_model: Dict[str, List[DecisionRule]] = {}
+        for rule in rules:
+            by_model.setdefault(rule.model_name, []).append(rule)
+
+        for model_name, model_rules in by_model.items():
+            try:
+                evaluator = self.config_manager.get_decision_evaluator(model_name)
+            except ValueError as e:
+                warnings.warn(str(e), UserWarning, stacklevel=2)
+                continue
+
+            # Build questions dict: one entry per rule (key = bare identifier)
+            questions = {}
+            for rule in model_rules:
+                key = rule.identifier.lstrip('$')
+                cleaner = self.config_manager.get_cleaner(rule.cleaner_name)
+                cleaned_text = cache.get_cleaned_text(text, cleaner, rule.cleaner_name)
+                questions[key] = build_question_spec(
+                    rule.answer_type, rule.question, rule.positive_label
+                )
+
+            # Build state: merge cleaned text with fields if available
+            # Use the first rule's cleaner for the shared text (all share the same text)
+            first_rule = model_rules[0]
+            cleaner = self.config_manager.get_cleaner(first_rule.cleaner_name)
+            cleaned_text = cache.get_cleaned_text(text, cleaner, first_rule.cleaner_name)
+            state = {"content": cleaned_text, **(fields or {})} if fields else cleaned_text
+
+            try:
+                decision_result: DecisionResult = evaluator.decide(state, questions)
+            except Exception as e:
+                warnings.warn(
+                    f"Decision evaluator '{model_name}' failed: {e}",
+                    UserWarning, stacklevel=2
+                )
+                continue
+
+            # Map each answer back to its rule
+            for rule in model_rules:
+                key = rule.identifier.lstrip('$')
+                detail = self._evaluate_decision_answer(rule, key, decision_result)
+                if detail:
+                    results[rule.identifier] = [detail]
+
+        return results
+
+    @staticmethod
+    def _evaluate_decision_answer(
+        rule: DecisionRule,
+        answer_key: str,
+        result: DecisionResult,
+    ) -> Optional[MatchDetail]:
+        """
+        Extract and threshold a single answer from a DecisionResult.
+
+        Returns a MatchDetail if the answer constitutes a match, else None.
+        """
+        if rule.answer_type == 'choice':
+            answer = result.choices.get(answer_key)
+            if not answer:
+                return None
+            chosen = answer.get('choice', '')
+            confidence = float(answer.get('confidence', 0.0))
+            if chosen == rule.positive_label and confidence >= rule.threshold:
+                return MatchDetail(
+                    identifier=rule.identifier,
+                    matched_text=chosen,
+                    score=confidence,
+                    explanation=f"Decision choice='{chosen}' confidence={confidence:.3f}",
+                )
+
+        elif rule.answer_type == 'noul':
+            prob = result.nouls.get(answer_key)
+            if prob is None:
+                return None
+            prob = float(prob)
+            if prob >= rule.threshold:
+                return MatchDetail(
+                    identifier=rule.identifier,
+                    matched_text=f"noul={prob:.3f}",
+                    score=prob,
+                    explanation=f"Decision noul={prob:.3f} >= threshold={rule.threshold}",
+                )
+
+        elif rule.answer_type == 'score':
+            answer = result.scores.get(answer_key)
+            if not answer:
+                return None
+            score_val = float(answer.get('score', 0.0))
+            confidence = float(answer.get('confidence', 1.0))
+            if score_val >= rule.threshold:
+                return MatchDetail(
+                    identifier=rule.identifier,
+                    matched_text=f"score={score_val:.2f}",
+                    score=score_val / 4.0,  # normalise to [0,1] assuming 0-4 scale
+                    explanation=f"Decision score={score_val:.2f} >= threshold={rule.threshold}",
+                )
+
+        return None
 
     def _execute_llm(self, rule, text: str, cache: TextCache) -> List[MatchDetail]:
         """Execute LLM evaluation."""

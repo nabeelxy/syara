@@ -29,6 +29,7 @@ from syara.models import (
     ClassifierRule,
     LLMRule,
     FieldRule,
+    DecisionRule,
 )
 from syara.config import ConfigManager, Config
 
@@ -50,6 +51,7 @@ __all__ = [
     'ClassifierRule',
     'LLMRule',
     'FieldRule',
+    'DecisionRule',
     # Config
     'ConfigManager',
     'Config',

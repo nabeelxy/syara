@@ -24,6 +24,7 @@ class Config:
     phash_matchers: Dict[str, str] = field(default_factory=dict)
     classifiers: Dict[str, str] = field(default_factory=dict)
     llms: Dict[str, str] = field(default_factory=dict)
+    decision_evaluators: Dict[str, Any] = field(default_factory=dict)
     api_keys: Dict[str, str] = field(default_factory=dict)
     llm_configs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
@@ -45,6 +46,7 @@ class ConfigManager:
         self._phash_cache: Dict[str, Any] = {}
         self._classifier_cache: Dict[str, Any] = {}
         self._llm_cache: Dict[str, Any] = {}
+        self._decision_cache: Dict[str, Any] = {}
 
     def _load_config(self, config_path: Optional[str]) -> Config:
         """Load configuration from YAML file."""
@@ -323,3 +325,41 @@ class ConfigManager:
         self.config.llms[name] = class_path
         if name in self._llm_cache:
             del self._llm_cache[name]
+
+    def get_decision_evaluator(self, name: str):
+        """
+        Get a decision evaluator instance by name.
+
+        Supports both dotted class-path strings and pre-instantiated objects,
+        matching the same pattern as all other get_*() methods.
+        """
+        if name in self._decision_cache:
+            return self._decision_cache[name]
+
+        class_path_or_instance = self.config.decision_evaluators.get(name)
+        if class_path_or_instance is None:
+            raise ValueError(
+                f"Unknown decision evaluator: {name!r}. "
+                "Register it with config_manager.register_decision_evaluator()."
+            )
+
+        if isinstance(class_path_or_instance, str):
+            instance = self._instantiate_class(class_path_or_instance)
+        else:
+            instance = class_path_or_instance
+
+        self._decision_cache[name] = instance
+        return instance
+
+    def register_decision_evaluator(self, name: str, evaluator) -> None:
+        """
+        Register a decision evaluator by name.
+
+        Args:
+            name: Name used in decision: rules, e.g. "jev", "laya", "winnow"
+            evaluator: Either a dotted class-path string or a live
+                       DecisionEvaluator instance.
+        """
+        self.config.decision_evaluators[name] = evaluator
+        if name in self._decision_cache:
+            del self._decision_cache[name]

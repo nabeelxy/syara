@@ -16,6 +16,7 @@ from syara.engine.field_matcher import FieldMatcher
 from syara.engine.semantic_matcher import SemanticMatcher, SBERTMatcher
 from syara.engine.classifier import SemanticClassifier, TunedSBERTClassifier, CalibratedSBERTClassifier, DistilBERTClassifier
 from syara.engine.llm_evaluator import LLMEvaluator, OpenAIEvaluator, OSSLLMEvaluator
+from syara.engine.decision_evaluator import DecisionEvaluator, DecisionResult
 
 __all__ = [
     # Cleaners
@@ -45,4 +46,7 @@ __all__ = [
     'LLMEvaluator',
     'OpenAIEvaluator',
     'OSSLLMEvaluator',
+    # Decision Evaluators
+    'DecisionEvaluator',
+    'DecisionResult',
 ]
