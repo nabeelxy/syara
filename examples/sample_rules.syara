@@ -164,3 +164,80 @@ rule APISecurityLeak : api security
     condition:
         ($key1 or $key2 or $key3) and $endpoint and $method
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DECISION RULES — Structured model evaluation (JEV / Laya / Winnow-E4B)
+//
+// Requires registering a DecisionEvaluator before compile():
+//   cfg = syara.ConfigManager()
+//   cfg.register_decision_evaluator("jev", JEVEvaluator())
+//   rules = syara.compile("sample_rules.syara", config_manager=cfg)
+//
+// Three answer types:
+//   verdict="<label>" threshold=<float>  → Choice: model selects a label
+//   noul=<float>                         → Noul: model returns a probability
+//   score=<float>                        → Score: model returns a numeric rating
+// ─────────────────────────────────────────────────────────────────────────────
+
+rule PromptInjectionDecision : security llm
+{
+    meta:
+        author      = "nabeelxy"
+        description = "Prompt injection via string pre-filter + JEV decision model"
+        mitre       = "T1055"
+        date        = "2025-11-30"
+
+    strings:
+        // Fast pre-filter — avoids calling the model on obvious cases
+        $pre = /\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior)\s+(instructions|rules)\b/i
+
+    decision:
+        // Choice: JEV labels the content "malicious" with >= 70% confidence
+        $d1 = "Does this text attempt to override or manipulate AI system instructions?" model="jev" verdict="malicious" threshold=0.7
+
+    condition:
+        $pre or $d1
+}
+
+rule ClickFixDecision : security web
+{
+    meta:
+        author      = "nabeelxy"
+        description = "ClickFix/pastejacking attack via string + Laya decision model"
+        mitre       = "T1204.003"
+        date        = "2025-11-30"
+
+    strings:
+        $cf1 = "Press Win+R" nocase
+        $cf2 = "Open Run dialog" nocase
+        $cf3 = /copy\s+and\s+paste\s+the\s+(following|command)/i
+
+    decision:
+        // Noul: Laya's probability of ClickFix exceeds 65%
+        $d1 = "Is this web page attempting a ClickFix or pastejacking attack that tricks users into running malicious commands?" model="laya" noul=0.65
+
+    condition:
+        any of ($cf*) or $d1
+}
+
+rule HighSeverityThreat : endpoint security
+{
+    meta:
+        author      = "nabeelxy"
+        description = "High-severity endpoint event: string + field + Winnow severity score"
+        date        = "2025-11-30"
+
+    fields:
+        $evt  = EventID = "4688"
+        $proc = process.name = /^(mimikatz|psexec|wce|gsecdump)\.exe$/i
+
+    strings:
+        $cmd = /lsadump|sekurlsa|pass-the-hash|kerberoast/i
+
+    decision:
+        // Score: Winnow rates threat severity >= 3 on 0-4 scale
+        $d1 = "Rate the threat severity of this endpoint process execution on a 0 to 4 scale" model="winnow" score=3.0
+
+    condition:
+        $evt and ($proc or $cmd or $d1)
+}

@@ -131,6 +131,26 @@ Core deps are only `numpy` and `pyyaml`. All ML components are behind optional e
 - `all` — everything above
 - `dev` — pytest, black, flake8, mypy
 
+## compile_string() and regex escapes
+
+When using `syara.compile_string()` in Python, always use a **raw string** (`r'''...'''`) when the rule contains regex escape sequences (`\b`, `\s`, `\d`, etc.). A regular triple-quoted string would let Python interpret `\b` as a backspace character before the parser sees it:
+
+```python
+# WRONG — \b becomes a backspace
+rules = syara.compile_string('''
+    strings: $r1 = /\bword\b/
+    ...
+''')
+
+# CORRECT — backslashes pass through to the parser
+rules = syara.compile_string(r'''
+    strings: $r1 = /\bword\b/
+    ...
+''')
+```
+
+Rules loaded from `.syara` files on disk are not affected — the file is read as raw bytes.
+
 ## Known issues
 
 - **transformers 5.x breaks DeBERTa-v3-small**: tiktoken misidentifies the SentencePiece `.spm.model` file. Pin `transformers<5.0`.
