@@ -1,0 +1,20 @@
+syara/engine/semantic_matcher.py
+  s_cc8756834edad4::t_0f9108017b53d2 64,72-74,76
+  s_cc8756834edad4::t_e2faf1d6f15b14 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "6e714e089f0ad6116742aaa030f5852b0440e30e",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
