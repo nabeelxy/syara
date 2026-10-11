@@ -1,6 +1,8 @@
 """
 LLM-based evaluation for semantic rule matching.
 """
+import re
+import math
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 from syara.models import LLMRule, MatchDetail
@@ -95,17 +97,15 @@ Does the input text semantically match the pattern's intent? Respond with:
 
     def _parse_response(self, response: str) -> Tuple[bool, str]:
         """Parse LLM response into match result and explanation."""
-        response = response.strip()
+        upper = response.strip().upper()
 
-        if response.upper().startswith("YES"):
-            # Extract explanation after "YES:"
+        if re.match(r'YES\b', upper):
             explanation = response.split(":", 1)[1].strip() if ":" in response else "LLM matched"
             return True, explanation
-        elif response.upper().startswith("NO"):
+        elif re.match(r'NO\b', upper):
             explanation = response.split(":", 1)[1].strip() if ":" in response else "LLM did not match"
             return False, explanation
         else:
-            # Ambiguous response
             return False, f"Ambiguous LLM response: {response}"
 
     def evaluate_chunks(
@@ -243,17 +243,13 @@ Answer YES or NO with a brief explanation:"""
 
     def _parse_response(self, response: str) -> Tuple[bool, str]:
         """Parse LLM response."""
-        response = response.strip()
+        upper = response.strip().upper()
 
-        # Check for YES/NO in response
-        response_upper = response.upper()
-
-        if "YES" in response_upper and "NO" not in response_upper:
+        if re.match(r'YES\b', upper):
             return True, response
-        elif "NO" in response_upper:
+        elif re.match(r'NO\b', upper):
             return False, response
         else:
-            # Ambiguous - default to no match
             return False, f"Ambiguous response: {response}"
 
     def evaluate_chunks(
