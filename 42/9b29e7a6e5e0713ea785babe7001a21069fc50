@@ -1,0 +1,22 @@
+README.md
+  s_cc8756834edad4::t_8da92faf7a4cdf 3
+CHANGELOG.md
+  s_cc8756834edad4::t_927710c6411708 8-35
+  s_cc8756834edad4::t_592c740b526bae 169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "429b29e7a6e5e0713ea785babe7001a21069fc50",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
