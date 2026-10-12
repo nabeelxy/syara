@@ -1,0 +1,27 @@
+README.md
+  s_cc8756834edad4::t_cf77465715408f 74
+  s_cc8756834edad4::t_d4409337755739 274
+  s_cc8756834edad4::t_955e7d462de695 358
+syara/engine/llm_evaluator.py
+  s_cc8756834edad4::t_190dae9ebfe438 255-260,272-273,275,278
+  s_cc8756834edad4::t_c87d6bbb62270b 190-191
+  s_cc8756834edad4::t_4c9c556682915e 15,24-25
+  s_cc8756834edad4::t_f62d2e942671f8 54-55
+  s_cc8756834edad4::t_db9611147756b5 234-235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "2ff1355650a9c5a72b9baecf7cdf521c3481afc9",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
