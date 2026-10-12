@@ -12,7 +12,7 @@ class LLMEvaluator(ABC):
     """Abstract base class for LLM evaluators."""
 
     @abstractmethod
-    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str]:
+    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str, float]:
         """
         Evaluate whether input_text matches the semantic intent of rule_text.
 
@@ -21,7 +21,8 @@ class LLMEvaluator(ABC):
             input_text: Text to evaluate
 
         Returns:
-            Tuple of (is_match, explanation)
+            Tuple of (is_match, explanation, confidence) where confidence is a
+            float in [0.0, 1.0].
         """
         pass
 
@@ -50,8 +51,8 @@ class OpenAIEvaluator(LLMEvaluator):
         self.model_name = model_name
         self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
-    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str]:
-        """Evaluate using OpenAI LLM."""
+    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str, float]:
+        """Evaluate using OpenAI LLM. Returns (is_match, explanation, confidence)."""
         if not rule_text or not input_text:
             return False, "Empty input", 0.0
 
@@ -186,8 +187,8 @@ class OSSLLMEvaluator(LLMEvaluator):
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name)
         self.torch = torch
 
-    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str]:
-        """Evaluate using OSS LLM."""
+    def evaluate(self, rule_text: str, input_text: str) -> Tuple[bool, str, float]:
+        """Evaluate using OSS LLM. Returns (is_match, explanation, confidence)."""
         if not rule_text or not input_text:
             return False, "Empty input", 0.0
 
@@ -230,8 +231,8 @@ Answer YES or NO with a brief explanation:"""
         except Exception:
             return 1.0
 
-    def _evaluate_local(self, prompt: str) -> Tuple[bool, str]:
-        """Evaluate using locally loaded model."""
+    def _evaluate_local(self, prompt: str) -> Tuple[bool, str, float]:
+        """Evaluate using locally loaded model. Returns (is_match, explanation, confidence)."""
         try:
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
 
@@ -251,8 +252,12 @@ Answer YES or NO with a brief explanation:"""
         except Exception as e:
             return False, f"Local LLM error: {str(e)}", 0.0
 
-    def _evaluate_remote(self, prompt: str) -> Tuple[bool, str]:
-        """Evaluate using remote endpoint."""
+    def _evaluate_remote(self, prompt: str) -> Tuple[bool, str, float]:
+        """Evaluate using remote endpoint. Returns (is_match, explanation, confidence).
+
+        Remote endpoints do not expose token logprobs, so confidence defaults to
+        1.0 on a match and 0.0 on no-match / error.
+        """
         try:
             import requests
 
@@ -264,12 +269,13 @@ Answer YES or NO with a brief explanation:"""
 
             if response.status_code == 200:
                 result = response.json().get('text', '')
-                return self._parse_response(result)
+                is_match, explanation = self._parse_response(result)
+                return is_match, explanation, 1.0 if is_match else 0.0
             else:
-                return False, f"Remote LLM error: HTTP {response.status_code}"
+                return False, f"Remote LLM error: HTTP {response.status_code}", 0.0
 
         except Exception as e:
-            return False, f"Remote LLM error: {str(e)}"
+            return False, f"Remote LLM error: {str(e)}", 0.0
 
     def _parse_response(self, response: str) -> Tuple[bool, str]:
         """Parse LLM response."""

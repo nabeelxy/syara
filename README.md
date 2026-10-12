@@ -71,7 +71,7 @@ syara/
 │   ├── sample_rules.syara         # Text-based rules (strings, similarity, fields, etc.)
 │   └── ...
 │
-├── tests/                          # Test suite (229 tests)
+├── tests/                          # Test suite (287 tests)
 └── pyproject.toml
 ```
 
@@ -271,7 +271,7 @@ phash:
 ```python
 import syara
 
-rules = syara.compile_string('''
+rules = syara.compile_string(r'''
     rule prompt_injection : security {
         meta:
             description = "Detects prompt injection attempts"
@@ -355,7 +355,7 @@ for match in rules.match_any(event.get("message", ""), fields=event):
 ```python
 import syara
 
-rules = syara.compile_string('''
+rules = syara.compile_string(r'''
     rule JailbreakAttempt : llm security {
         meta:
             description = "Detects DAN-style jailbreak attempts"
