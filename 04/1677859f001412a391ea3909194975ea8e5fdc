@@ -1,0 +1,21 @@
+syara/__init__.py
+  s_cc8756834edad4::t_7f75d8d101dec0 17
+pyproject.toml
+  s_cc8756834edad4::t_7ce391417028bd 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "041677859f001412a391ea3909194975ea8e5fdc",
+  "prompts": {},
+  "sessions": {
+    "s_cc8756834edad4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f44a33a-7161-48c4-8602-184fc28e13d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "nabeelxy <nabeel.yoosuf@gmail.com>"
+    }
+  }
+}
