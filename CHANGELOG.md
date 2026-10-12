@@ -5,6 +5,34 @@ All notable changes to SYARA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-10-11
+
+### Added
+- **`fields:` section (Sigma-style key:value matching)** — match against structured event data (logs, alerts, API payloads) with `$id = field.name = "literal"` or `$id = field.name = /regex/`. New `FieldRule` model and `FieldMatcher` engine component. Pass event data via `match(text, fields={...})`; absent fields evaluate to `False`.
+- **`decision:` section (structured model evaluation)** — pluggable decision models (JEV, Laya, Winnow-E4B) returning typed `choice`/`noul`/`score` answers. New `DecisionRule` model, `DecisionEvaluator` ABC, `DecisionResult`, and `build_question_spec()` helper. Register via `ConfigManager.register_decision_evaluator()`. Identifiers sharing a model are batched into one call; the whole block is short-circuited when it cannot change the condition outcome.
+- **`syara.compile_string()`** — module-level public API for compiling rules directly from a string (previously only on `SYaraCompiler`).
+- **`CompiledRules.match_any()` and `.matched()`** — convenience helpers returning only matched rules, or a single boolean.
+- **Per-instance SBERT embedding cache** — `SBERTMatcher` caches embeddings across `match()` calls; pattern strings are encoded only once. `get_similarity_batch()` batch-encodes only uncached chunks.
+- **Calibrated LLM confidence scores** — `LLMEvaluator.evaluate()` now returns a 3-tuple `(is_match, explanation, confidence)`; OpenAI uses token logprobs, OSS models use YES/NO softmax. `MatchDetail.score` reflects the confidence.
+- **`CalibratedSBERTClassifier`** — descriptive alias for `TunedSBERTClassifier`, exported from `syara.engine`.
+- **Order-independent rule sections** — sections (`meta`, `strings`, `similarity`, `fields`, `decision`, etc.) may now appear in any order within a rule body.
+- **2-hour CTF workshop** (`workshop/`) — five Google Colab notebooks with 8 flags covering the full library, built for [un]prompted.
+- **New example scripts** — `examples/field_matching.py` and `examples/decision_model.py`.
+- **Test suites** — `tests/test_improvements.py`, `tests/test_fields.py`, `tests/test_decision.py`; 287 tests total.
+
+### Fixed
+- **`eval()` removed from condition evaluation** — replaced with a `_BoolEval` recursive-descent parser for safe boolean evaluation of translated conditions.
+- **`_parse_response` false positives** — LLM YES/NO parsing now uses word-boundary matching so words like "NOBODY" or "KNOWLEDGE" no longer trigger the NO branch.
+- **`classify()` return contract** — `TunedSBERTClassifier`/`DistilBERTClassifier` now return `(confidence >= 0.5, confidence)` instead of always `True`.
+- **Escaped slashes in regex patterns** — `/https?:\/\//` style patterns parse correctly; inline multi-flag support (`/pattern/is`).
+- **Classifier short-circuit** — classifier rules are now skipped (like LLM rules) when they cannot change the condition outcome.
+- **`_evaluate_remote()` return arity** — remote LLM endpoint path now returns a proper 3-tuple, consistent with the `evaluate()` contract.
+- **Docs/code consistency** — corrected README test count, converted regex-bearing `compile_string` examples to raw strings (`r'''...'''`), and aligned `evaluate()` type annotations with the 3-tuple return.
+
+### Backward Compatibility
+- ✅ All existing rules and APIs continue to work — `fields:` and `decision:` are additive sections, and `match()`/`match_any()`/`matched()` accept an optional `fields=` argument.
+- ✅ `evaluate_chunks()` accepts both legacy 2-tuple and new 3-tuple `evaluate()` returns.
+
 ## [0.2.4] - 2026-03-04
 
 ### Added
@@ -138,6 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration system
 - Basic test suite
 
+[0.2.5]: https://github.com/nabeelxy/syara/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/nabeelxy/syara/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/nabeelxy/syara/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/nabeelxy/syara/compare/v0.2.1...v0.2.2
